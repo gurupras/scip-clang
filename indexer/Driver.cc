@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <map>
 #include <filesystem>
 #include <fstream>
 #include <ios>
@@ -510,6 +511,12 @@ public:
     return this->allJobList;
   }
 
+  /// Whether jobId was abandoned: its worker was terminated before the
+  /// job's result was processed (see NOTE(ref: mail-from-the-dead)).
+  bool isMaybeErrored(JobId jobId) const {
+    return this->maybeErroredJobs.contains(jobId);
+  }
+
 private:
   void checkInvariants() const {
     // clang-format off
@@ -898,6 +905,20 @@ class Driver {
   /// Total number of commands in the compilation database.
   size_t compdbCommandCount = 0;
   TusIndexedCount indexedSoFar;
+
+  // Under --deterministic, semantic analysis results are planned in the order
+  // their tasks were queued (compilation database order), so a header is
+  // assigned to the first TU in that order which reports it, not to whichever
+  // finishes first. A result that arrives early waits here, with its worker
+  // held busy on its emit subtask; the emit request is sent once planned.
+  struct DeferredSema {
+    SemanticAnalysisJobResult result;
+    IndexJobRequest request;
+    WorkerId workerId;
+  };
+  std::deque<uint32_t> semaTaskOrder;
+  std::map<uint32_t, DeferredSema> deferredSema;
+  absl::flat_hash_set<uint32_t> abandonedSemaTasks;
   compdb::ResumableParser compdbParser;
 
 public:
@@ -1189,6 +1210,9 @@ private:
     std::vector<compdb::CommandObject> commands{};
     this->compdbParser.parseMore(commands);
     for (auto &command : commands) {
+      if (this->options.deterministic) {
+        this->semaTaskOrder.push_back(command.index);
+      }
       this->scheduler.queueSemaTask(std::move(command));
     }
     return commands.size();
@@ -1272,6 +1296,75 @@ private:
         });
   }
 
+  // Sends a planned emit request; on failure the worker is replaced
+  // (NOTE(ref: terminate-on-send-emit-index)).
+  void sendEmitRequest(IndexJobRequest &&request, WorkerId workerId,
+                       size_t numFilesReceived, size_t numFilesSending) {
+    auto &queue = this->queues.driverToWorker[workerId];
+    auto newRequestJobId = request.id;
+    auto sendError = queue.send(std::move(request));
+    if (sendError.has_value()) {
+      spdlog::warn("failed to send message to worker indicating the subset "
+                   "of files to be indexed: {}",
+                   sendError->what());
+      spdlog::info("this is probably a scip-clang bug; please report it "
+                   "(https://github.com/sourcegraph/scip-clang/issues/new)");
+      spdlog::info("received {} files, attempted to send {} files",
+                   numFilesReceived, numFilesSending);
+      // NOTE(def: terminate-on-send-emit-index)
+      // There are several things we could do here.
+      // 1. Kill the worker and start with a new job.
+      // 2. Send a smaller message (e.g. with an empty list) for the
+      //    worker to detect and reset itself (instead of waiting
+      //    for the list of files to be indexed).
+      // 3. Try serializing smaller subsets until something succeeds.
+      // For simplicity, let's go with option 1 here.
+      this->scheduler.descheduleJobDueToSendError(workerId, newRequestJobId);
+      this->scheduler.terminateRunningWorker(
+          "failure to communicate over IPC", workerId,
+          [&](Scheduler::Process &&oldHandle) -> Scheduler::Process {
+            oldHandle.terminate();
+            return this->spawnWorker(workerId);
+          });
+    }
+  }
+
+  // Plans held semantic analysis results in queue order (--deterministic).
+  // A task whose job was abandoned (its worker terminated before a result
+  // was processed) is skipped, so it cannot stall the ones after it. A held
+  // result whose worker was terminated while waiting claims no headers: the
+  // headers stay available to a later TU that reports them.
+  void planDeferredSemaResults() {
+    while (!this->semaTaskOrder.empty()) {
+      auto task = this->semaTaskOrder.front();
+      auto it = this->deferredSema.find(task);
+      if (it == this->deferredSema.end()) {
+        if (this->abandonedSemaTasks.erase(task) > 0
+            || this->scheduler.isMaybeErrored(JobId::newTask(task))) {
+          this->semaTaskOrder.pop_front();
+          continue;
+        }
+        return; // the next result in order has not arrived yet
+      }
+      auto deferred = std::move(it->second);
+      this->deferredSema.erase(it);
+      this->semaTaskOrder.pop_front();
+      if (this->scheduler.isMaybeErrored(deferred.request.id)) {
+        continue;
+      }
+      std::vector<PreprocessedFileInfo> filesToBeIndexed{};
+      auto numFilesReceived = deferred.result.illBehavedFiles.size()
+                              + deferred.result.wellBehavedFiles.size();
+      this->planner.saveSemaResult(std::move(deferred.result),
+                                   filesToBeIndexed);
+      auto numFilesSending = filesToBeIndexed.size();
+      deferred.request.job.emitIndex.filesToBeIndexed =
+          std::move(filesToBeIndexed);
+      this->sendEmitRequest(std::move(deferred.request), deferred.workerId,
+                            numFilesReceived, numFilesSending);
+    }
+  }
+
   void processWorkerResponse(IndexJobResponse &&response,
                              const ProgressReporter &progressReporter) {
     TRACE_EVENT(tracing::indexing, "Driver::processWorkerResponse",
@@ -1282,12 +1375,30 @@ private:
       spdlog::debug("worker {} was terminated before job {}'s result "
                     "was processed, so can't send an emit index job",
                     response.workerId, response.jobId);
+      if (this->options.deterministic
+          && response.result.kind == IndexJob::Kind::SemanticAnalysis) {
+        this->abandonedSemaTasks.insert(response.jobId.taskId());
+        this->planDeferredSemaResults();
+      }
       return;
     }
     auto latestIdleWorkerId = *optLatestIdleWorkerId;
     switch (response.result.kind) {
     case IndexJob::Kind::SemanticAnalysis: {
       auto &semaResult = response.result.semanticAnalysis;
+      if (this->options.deterministic) {
+        // Hold the worker (busy on its emit subtask) and plan in order.
+        auto workerId = latestIdleWorkerId.id;
+        IndexJobRequest held{this->scheduler.createSubtaskAndScheduleOnWorker(
+            latestIdleWorkerId, response.jobId,
+            IndexJob{IndexJob::Kind::EmitIndex, SemanticAnalysisJobDetails{},
+                     EmitIndexJobDetails{}})};
+        this->deferredSema.emplace(
+            response.jobId.taskId(),
+            DeferredSema{std::move(semaResult), std::move(held), workerId});
+        this->planDeferredSemaResults();
+        break;
+      }
       std::vector<PreprocessedFileInfo> filesToBeIndexed{};
 
       auto numFilesReceived = semaResult.illBehavedFiles.size()
@@ -1296,7 +1407,6 @@ private:
       auto numFilesSending = filesToBeIndexed.size();
 
       auto workerId = latestIdleWorkerId.id;
-      auto &queue = this->queues.driverToWorker[workerId];
       IndexJobRequest newRequest{
           this->scheduler.createSubtaskAndScheduleOnWorker(
               latestIdleWorkerId, response.jobId,
@@ -1305,33 +1415,8 @@ private:
                   SemanticAnalysisJobDetails{},
                   EmitIndexJobDetails{std::move(filesToBeIndexed)},
               })};
-      auto newRequestJobId = newRequest.id;
-      auto sendError = queue.send(std::move(newRequest));
-      if (sendError.has_value()) {
-        spdlog::warn("failed to send message to worker indicating the subset "
-                     "of files to be indexed: {}",
-                     sendError->what());
-        spdlog::info("this is probably a scip-clang bug; please report it "
-                     "(https://github.com/sourcegraph/scip-clang/issues/new)");
-        spdlog::info("received {} files, attempted to send {} files",
-                     numFilesReceived, numFilesSending);
-        // NOTE(def: terminate-on-send-emit-index)
-        // There are several things we could do here.
-        // 1. Kill the worker and start with a new job.
-        // 2. Send a smaller message (e.g. with an empty list) for the
-        //    worker to detect and reset itself (instead of waiting
-        //    for the list of files to be indexed).
-        // 3. Try serializing smaller subsets until something succeeds.
-        // For simplicity, let's go with option 1 here.
-        this->scheduler.descheduleJobDueToSendError(workerId, newRequestJobId);
-        this->scheduler.terminateRunningWorker(
-            "failure to communicate over IPC", workerId,
-            [&](Scheduler::Process &&oldHandle) -> Scheduler::Process {
-              oldHandle.terminate();
-              return this->spawnWorker(workerId);
-            });
-        return;
-      }
+      this->sendEmitRequest(std::move(newRequest), workerId, numFilesReceived,
+                            numFilesSending);
       break;
     }
     case IndexJob::Kind::EmitIndex: {
@@ -1395,6 +1480,10 @@ private:
     // was actually submitted by a worker which was terminated.
     auto now = std::chrono::steady_clock::now();
     this->terminateLongRunningWorkersAndRespawn(now - workerTimeout);
+    if (this->options.deterministic) {
+      // A termination may have abandoned the task the queue is waiting on.
+      this->planDeferredSemaResults();
+    }
     return;
   }
 
