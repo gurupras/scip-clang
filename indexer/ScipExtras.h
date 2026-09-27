@@ -66,6 +66,9 @@ struct OccurrenceExt {
     for (auto &i : self.occ.range()) {
       h = H::combine(std::move(h), i);
     }
+    for (auto &i : self.occ.enclosing_range()) {
+      h = H::combine(std::move(h), i);
+    }
     h = H::combine(std::move(h), self.occ.symbol());
     h = H::combine(std::move(h), self.occ.symbol_roles());
     for (auto &d : self.occ.override_documentation()) {
@@ -89,6 +92,7 @@ constexpr char missingDocumentationPlaceholder[28] =
 class SymbolInformationBuilder final {
   std::vector<std::string> documentation;
   absl::flat_hash_set<RelationshipExt> relationships;
+  scip::SymbolInformation::Kind kind = scip::SymbolInformation::UnspecifiedKind;
   scip_clang::Bomb _bomb;
 
 public:
@@ -115,6 +119,17 @@ public:
     absl::c_move(std::move(newDocumentation),
                  std::back_inserter(this->documentation));
   };
+
+  /// Kinds come from the AST and should agree across TUs; if two differ, the
+  /// numerically smallest non-zero kind is kept, so the result does not
+  /// depend on merge order.
+  void mergeKind(scip::SymbolInformation::Kind newKind) {
+    if (newKind != scip::SymbolInformation::UnspecifiedKind
+        && (this->kind == scip::SymbolInformation::UnspecifiedKind
+            || newKind < this->kind)) {
+      this->kind = newKind;
+    }
+  }
 
   template <typename C> void mergeRelationships(C &&newRelationships) {
     for (auto &rel : newRelationships) {

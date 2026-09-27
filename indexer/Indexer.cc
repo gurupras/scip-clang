@@ -46,6 +46,70 @@
 
 namespace scip_clang {
 
+// The SCIP kind of a declaration that gets a SymbolInformation. Kinds are
+// decided here, from the AST, so every record describing a symbol carries the
+// same kind, whichever TU described it.
+static scip::SymbolInformation::Kind symbolKindOf(const clang::Decl &decl) {
+  using K = scip::SymbolInformation;
+  if (auto *usingShadowDecl = llvm::dyn_cast<clang::UsingShadowDecl>(&decl)) {
+    if (auto *target = usingShadowDecl->getTargetDecl()) {
+      return symbolKindOf(*target);
+    }
+    return K::UnspecifiedKind;
+  }
+  if (llvm::isa<clang::CXXConstructorDecl>(decl)) {
+    return K::Constructor;
+  }
+  if (auto *methodDecl = llvm::dyn_cast<clang::CXXMethodDecl>(&decl)) {
+    if (methodDecl->isPureVirtual()) {
+      return K::PureVirtualMethod;
+    }
+    return methodDecl->isStatic() ? K::StaticMethod : K::Method;
+  }
+  if (llvm::isa<clang::FunctionDecl>(decl)) {
+    return K::Function;
+  }
+  if (llvm::isa<clang::NamespaceDecl>(decl)) {
+    return K::Namespace;
+  }
+  if (auto *tagDecl = llvm::dyn_cast<clang::TagDecl>(&decl)) {
+    if (tagDecl->isStruct()) {
+      return K::Struct;
+    }
+    if (tagDecl->isUnion()) {
+      return K::Union;
+    }
+    if (tagDecl->isEnum()) {
+      return K::Enum;
+    }
+    if (tagDecl->isInterface()) {
+      return K::Interface;
+    }
+    return K::Class;
+  }
+  if (llvm::isa<clang::EnumConstantDecl>(decl)) {
+    return K::EnumMember;
+  }
+  if (llvm::isa<clang::FieldDecl>(decl)) {
+    return K::Field;
+  }
+  if (auto *varDecl = llvm::dyn_cast<clang::VarDecl>(&decl)) {
+    return varDecl->isStaticDataMember() ? K::StaticField : K::Variable;
+  }
+  if (llvm::isa<clang::BindingDecl>(decl)) {
+    return K::Variable;
+  }
+  if (llvm::isa<clang::TypedefNameDecl>(decl)) {
+    return K::TypeAlias;
+  }
+  if (llvm::isa<clang::TemplateTypeParmDecl>(decl)
+      || llvm::isa<clang::NonTypeTemplateParmDecl>(decl)
+      || llvm::isa<clang::TemplateTemplateParmDecl>(decl)) {
+    return K::TypeParameter;
+  }
+  return K::UnspecifiedKind;
+}
+
 std::pair<FileLocalSourceRange, clang::FileID>
 FileLocalSourceRange::fromNonEmpty(const clang::SourceManager &sourceManager,
                                    clang::SourceRange inclusiveRange) {
@@ -246,6 +310,7 @@ void MacroIndexer::emitDocumentOccurrencesAndSymbols(
                   scip::missingDocumentationPlaceholder;
               ENFORCE(!occ.symbol().empty());
               macroOcc.emitSymbolInformation(occ.symbol(), symbolInfo);
+              symbolInfo.set_kind(scip::SymbolInformation::Macro);
               *document.add_symbols() = std::move(symbolInfo);
               break;
             }
@@ -455,7 +520,7 @@ void TuIndexer::saveBindingDecl(const clang::BindingDecl &bindingDecl) {
     return;
   }
   this->saveDefinition(optSymbol.value(), bindingDecl.getLocation(),
-                       std::nullopt);
+                       std::nullopt, 0, &bindingDecl);
 }
 
 void TuIndexer::saveClassTemplateDecl(const clang::ClassTemplateDecl &) {
@@ -476,7 +541,7 @@ void TuIndexer::saveEnumConstantDecl(
 
   ENFORCE(enumConstantDecl.getBeginLoc() == enumConstantDecl.getLocation());
   this->saveDefinition(symbol, enumConstantDecl.getLocation(),
-                       std::move(symbolInfo));
+                       std::move(symbolInfo), 0, &enumConstantDecl);
 }
 
 void TuIndexer::saveEnumDecl(const clang::EnumDecl &enumDecl) {
@@ -513,7 +578,8 @@ void TuIndexer::saveFieldDecl(const clang::FieldDecl &fieldDecl) {
   }
   scip::SymbolInformation symbolInfo{};
   this->getDocComment(fieldDecl).addTo(symbolInfo);
-  this->saveDefinition(optSymbol.value(), fieldDecl.getLocation(), symbolInfo);
+  this->saveDefinition(optSymbol.value(), fieldDecl.getLocation(), symbolInfo,
+                       0, &fieldDecl);
 }
 
 void TuIndexer::saveFieldReference(const clang::FieldDecl &fieldDecl,
@@ -558,7 +624,7 @@ void TuIndexer::saveFunctionDecl(const clang::FunctionDecl &functionDecl) {
     // and for 'operator<<', it would exclude the range of '<<'.
     // So just rely on the single token implementation for now.
     this->saveDefinition(symbol, functionDecl.getLocation(),
-                         std::move(symbolInfo));
+                         std::move(symbolInfo), 0, &functionDecl);
   } else {
     this->saveForwardDeclaration(symbol, functionDecl.getLocation(),
                                  this->getDocComment(functionDecl));
@@ -612,7 +678,8 @@ void TuIndexer::saveNamespaceDecl(const clang::NamespaceDecl &namespaceDecl) {
                         namespaceDecl.isInlineNamespace() ? "inline " : "",
                         namespaceDecl.getName());
 
-  this->saveDefinition(symbol, startLoc, std::move(symbolInfo));
+  this->saveDefinition(symbol, startLoc, std::move(symbolInfo), 0,
+                       &namespaceDecl);
 }
 
 void TuIndexer::trySaveTypeReference(const clang::Type *type,
@@ -787,7 +854,8 @@ void TuIndexer::saveTagDecl(const clang::TagDecl &tagDecl) {
              == clang::TSK_ExplicitSpecialization) {
     this->saveReference(symbol, tagDecl.getLocation());
   }
-  this->saveDefinition(symbol, tagDecl.getLocation(), std::move(symbolInfo));
+  this->saveDefinition(symbol, tagDecl.getLocation(), std::move(symbolInfo), 0,
+                       &tagDecl);
 }
 
 void TuIndexer::saveTagTypeLoc(const clang::TagTypeLoc &tagTypeLoc) {
@@ -804,7 +872,8 @@ void TuIndexer::saveTagTypeLoc(const clang::TagTypeLoc &tagTypeLoc) {
 #define SAVE_TEMPLATE_PARM(name_)                                          \
   void TuIndexer::save##name_##Decl(const clang::name_##Decl &decl) {      \
     if (auto optSymbol = this->symbolFormatter.get##name_##Symbol(decl)) { \
-      this->saveDefinition(*optSymbol, decl.getLocation(), std::nullopt);  \
+      this->saveDefinition(*optSymbol, decl.getLocation(), std::nullopt, 0, \
+                           &decl);                                         \
     }                                                                      \
   }
 FOR_EACH_TEMPLATE_PARM_TO_BE_INDEXED(SAVE_TEMPLATE_PARM)
@@ -892,7 +961,7 @@ void TuIndexer::saveTypedefNameDecl(
   scip::SymbolInformation symbolInfo{};
   this->getDocComment(typedefNameDecl).addTo(symbolInfo);
   this->saveDefinition(*optSymbol, typedefNameDecl.getLocation(),
-                       std::move(symbolInfo));
+                       std::move(symbolInfo), 0, &typedefNameDecl);
 }
 
 void TuIndexer::saveUsingShadowDecl(
@@ -903,7 +972,7 @@ void TuIndexer::saveUsingShadowDecl(
       scip::SymbolInformation symbolInfo{};
       this->getDocComment(usingShadowDecl).addTo(symbolInfo);
       this->saveDefinition(*optSymbol, usingShadowDecl.getLocation(),
-                           std::move(symbolInfo));
+                           std::move(symbolInfo), 0, &usingShadowDecl);
     }
     if (auto *namedDecl = usingShadowDecl.getTargetDecl()) {
       if (auto optSymbol =
@@ -938,14 +1007,14 @@ void TuIndexer::saveVarDecl(const clang::VarDecl &varDecl) {
   }
   if (varDecl.isLocalVarDeclOrParm()) {
     GET_SYMBOL;
-    this->saveDefinition(*optSymbol, loc, std::nullopt);
+    this->saveDefinition(*optSymbol, loc, std::nullopt, 0, &varDecl);
   }
   if (varDecl.isStaticDataMember() || varDecl.isFileVarDecl()) {
     GET_SYMBOL;
     // Non-static data members are handled by saveFieldDecl
     scip::SymbolInformation symbolInfo{};
     this->getDocComment(varDecl).addTo(symbolInfo);
-    this->saveDefinition(*optSymbol, loc, symbolInfo);
+    this->saveDefinition(*optSymbol, loc, symbolInfo, 0, &varDecl);
   }
 #undef GET_SYMBOL
 }
@@ -1174,10 +1243,72 @@ void TuIndexer::saveReference(SymbolNameRef symbol, clang::SourceLocation loc,
   (void)this->saveOccurrence(symbol, expansionLoc, extraRoles);
 }
 
+// NOTE(def: enclosing-range)
+// A definition's enclosing_range is its declaration's full extent: for a
+// function, from its return type (or `template <...>`) to the closing brace
+// of its body; for a defaulted or deleted function, its declaration; for a
+// using-declaration, the using-declaration; for a class, struct, union or
+// enum, the whole definition. Both ends are taken through their expansion
+// ranges, so a function made by a macro gets the invocation's extent, and
+// gtest's TEST(A, B) { ... } gives TestBody the invocation through the
+// closing brace, while the constructor and destructor made wholly inside the
+// expansion get the invocation alone. A pure virtual function has no body.
+// A range whose ends expand into different files is not emitted.
+std::optional<FileLocalSourceRange>
+TuIndexer::enclosingRange(const clang::Decl &decl, clang::FileID fileId) const {
+  clang::SourceRange range;
+  if (auto *usingShadowDecl = llvm::dyn_cast<clang::UsingShadowDecl>(&decl)) {
+    if (auto *introducer = usingShadowDecl->getIntroducer()) {
+      range = introducer->getSourceRange();
+    }
+  } else if (auto *functionDecl = llvm::dyn_cast<clang::FunctionDecl>(&decl)) {
+    if (functionDecl->isPureVirtual()) {
+      return std::nullopt;
+    }
+    if (!functionDecl->doesThisDeclarationHaveABody()
+        && !functionDecl->isExplicitlyDefaulted()
+        && !functionDecl->isDeletedAsWritten()) {
+      return std::nullopt;
+    }
+    range = functionDecl->getSourceRange();
+    if (auto *tmpl = functionDecl->getDescribedFunctionTemplate()) {
+      range.setBegin(tmpl->getSourceRange().getBegin());
+    }
+  } else if (auto *tagDecl = llvm::dyn_cast<clang::TagDecl>(&decl)) {
+    if (!tagDecl->isThisDeclarationADefinition()) {
+      return std::nullopt;
+    }
+    range = tagDecl->getSourceRange();
+    if (auto *recordDecl = llvm::dyn_cast<clang::CXXRecordDecl>(tagDecl)) {
+      if (auto *tmpl = recordDecl->getDescribedClassTemplate()) {
+        range.setBegin(tmpl->getSourceRange().getBegin());
+      }
+    }
+  } else {
+    return std::nullopt;
+  }
+  if (range.isInvalid()) {
+    return std::nullopt;
+  }
+  auto &sm = this->sourceManager;
+  auto begin = sm.getExpansionRange(range.getBegin()).getBegin();
+  auto endRange = sm.getExpansionRange(range.getEnd());
+  auto end = endRange.getEnd();
+  if (endRange.isTokenRange()) {
+    end = clang::Lexer::getLocForEndOfToken(end, 0, sm, this->langOptions);
+  }
+  if (begin.isInvalid() || end.isInvalid() || sm.getFileID(begin) != fileId
+      || sm.getFileID(end) != fileId
+      || sm.getFileOffset(end) <= sm.getFileOffset(begin)) {
+    return std::nullopt;
+  }
+  return FileLocalSourceRange::fromNonEmpty(sm, {begin, end}).first;
+}
+
 void TuIndexer::saveDefinition(
     SymbolNameRef symbol, clang::SourceLocation loc,
     std::optional<scip::SymbolInformation> &&optSymbolInfo,
-    int32_t extraRoles) {
+    int32_t extraRoles, const clang::Decl *decl) {
   auto expansionLoc = this->sourceManager.getExpansionLoc(loc);
   auto fileId = this->sourceManager.getFileID(expansionLoc);
   if (!this->fileIdsToBeIndexed.contains({fileId})) {
@@ -1190,9 +1321,23 @@ void TuIndexer::saveDefinition(
   if (optSymbolInfo.has_value() && optSymbolInfo->documentation_size() == 0) {
     *optSymbolInfo->add_documentation() = scip::missingDocumentationPlaceholder;
   }
+  if (optSymbolInfo.has_value() && decl) {
+    optSymbolInfo->set_kind(symbolKindOf(*decl));
+  }
   if (optStableFileId->isInProject) {
     auto &doc = this->saveOccurrence(symbol, expansionLoc,
                                      extraRoles | scip::SymbolRole::Definition);
+    if (decl) {
+      if (auto encl = this->enclosingRange(*decl, fileId)) {
+        auto &occ = doc.occurrences.back().occ;
+        occ.add_enclosing_range(encl->startLine - 1);
+        occ.add_enclosing_range(encl->startColumn - 1);
+        if (encl->startLine != encl->endLine) {
+          occ.add_enclosing_range(encl->endLine - 1);
+        }
+        occ.add_enclosing_range(encl->endColumn - 1);
+      }
+    }
     if (optSymbolInfo.has_value()) {
       doc.symbolInfos.emplace(symbol, std::move(optSymbolInfo.value()));
     }
