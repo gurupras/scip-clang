@@ -24,8 +24,14 @@ void ClangIdLookupMap::insert(AbsolutePathRef absPathRef, HashValue hashValue,
                                        .hashToFileId = {{hashValue, fileId}}}));
     return;
   }
-  // A single representative FileID is sufficient.
-  it->second->hashToFileId[hashValue] = fileId;
+  // A single representative FileID is sufficient. Keep the smallest, i.e.
+  // the first entry in inclusion order, so the choice does not depend on the
+  // (per-process seeded) iteration order of the caller's hash map.
+  auto [hashIt, inserted] =
+      it->second->hashToFileId.try_emplace(hashValue, fileId);
+  if (!inserted && fileId < hashIt->second) {
+    hashIt->second = fileId;
+  }
 }
 
 void ClangIdLookupMap::forEachPathAndHash(
@@ -59,11 +65,15 @@ ClangIdLookupMap::lookupAnyFileId(AbsolutePathRef absPathRef) const {
   if (it == this->impl.end()) {
     return {};
   }
+  // The smallest FileID, independent of the hash map's iteration order.
+  std::optional<clang::FileID> first;
   for (auto [hashValue, fileId] : it->second->hashToFileId) {
-    return fileId;
+    if (!first || fileId < *first) {
+      first = fileId;
+    }
   }
-  ENFORCE(false, "Shouldn't have stored empty maps");
-  return {};
+  ENFORCE(first.has_value(), "Shouldn't have stored empty maps");
+  return first;
 }
 
 void FileMetadataMap::populate(const ClangIdLookupMap &clangIdLookupMap) {
