@@ -377,9 +377,19 @@ private:
   /// Setting the symbol name on \param symbolInfo is not necessary.
   ///
   /// For local variables, \param symbolInfo should be \c std::nullopt.
+  ///
+  /// When \param decl is given, the SymbolInformation carries the decl's kind
+  /// and the definition occurrence carries the decl's extent as its
+  /// enclosing_range (see NOTE(ref: enclosing-range)).
   void saveDefinition(SymbolNameRef symbol, clang::SourceLocation loc,
                       std::optional<scip::SymbolInformation> &&symbolInfo,
-                      int32_t extraRoles = 0);
+                      int32_t extraRoles = 0,
+                      const clang::Decl *decl = nullptr);
+
+  /// The extent of \param decl in \param fileId: the expansion range of its
+  /// source range, when both ends expand into that file.
+  std::optional<FileLocalSourceRange>
+  enclosingRange(const clang::Decl &decl, clang::FileID fileId) const;
 
   /// Only for use inside \c saveDefinition.
   void saveExternalSymbol(SymbolNameRef symbol, scip::SymbolInformation &&);
