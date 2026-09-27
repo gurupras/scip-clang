@@ -354,6 +354,12 @@ SymbolFormatter::getContextSymbol(const clang::DeclContext &declContext,
       || llvm::isa<clang::ExternCContextDecl>(&declContext)) {
     return this->getLocationBasedSymbolPrefix(loc);
   }
+  // extern "C" { ... } does not name a scope: its declarations belong to
+  // the enclosing namespace (or the TU), so take the prefix from there.
+  if (auto *linkageSpecDecl =
+          llvm::dyn_cast<clang::LinkageSpecDecl>(&declContext)) {
+    return this->getContextSymbol(*linkageSpecDecl->getDeclContext(), loc);
+  }
   if (auto *functionDecl = llvm::dyn_cast<clang::FunctionDecl>(&declContext)) {
     // TODO: Strictly speaking, we should return some information marking
     // the symbol as local, but it shouldn't be possible to create spurious
@@ -367,12 +373,12 @@ SymbolFormatter::getContextSymbol(const clang::DeclContext &declContext,
   // - NamespaceDecl
   // - TagDecl
   // - FunctionDecl
+  // - LinkageSpecDecl
   // Pending:
   // - OMPDeclareReductionDecl
   // - OMPDeclareMapperDecl
   // - ObjCMethodDecl
   // - ObjCContainerDecl
-  // - LinkageSpecDecl
   // - ExportDecl
   // - BlockDecl
   // - CapturedDecl
