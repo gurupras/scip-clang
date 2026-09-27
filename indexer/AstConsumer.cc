@@ -117,12 +117,16 @@ public:
                 indexedProjectFiles.size());
 
     if (this->deterministic) {
+      // A header whose expansions differ within one TU (distinct hashes for
+      // one path) legitimately yields one document per expansion; the Driver
+      // merges them later. Order such documents by FileID, which follows
+      // inclusion order within the TU, instead of asserting uniqueness.
       auto comparePaths = [](const auto &p1, const auto &p2) -> bool {
         auto cmp = p1.first <=> p2.first;
-        ENFORCE(cmp != 0,
-                "document with path '{}' is present 2+ times in index",
-                p1.first.asStringView());
-        return cmp == std::strong_ordering::less;
+        if (cmp != 0) {
+          return cmp == std::strong_ordering::less;
+        }
+        return p1.second < p2.second;
       };
       absl::c_sort(indexedProjectFiles, comparePaths);
     }
