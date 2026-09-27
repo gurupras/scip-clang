@@ -20,10 +20,13 @@ void ClangIdLookupMap::insert(AbsolutePathRef absPathRef, HashValue hashValue,
                               clang::FileID fileId) {
   auto it = this->impl.find(absPathRef);
   if (it == this->impl.end()) {
-    this->impl.emplace(absPathRef, std::make_shared<Value>(Value{
-                                       .hashToFileId = {{hashValue, fileId}}}));
+    this->impl.emplace(absPathRef,
+                       std::make_shared<Value>(
+                           Value{.hashToFileId = {{hashValue, fileId}},
+                                 .allFileIds = {fileId}}));
     return;
   }
+  it->second->allFileIds.push_back(fileId);
   // A single representative FileID is sufficient. Keep the smallest, i.e.
   // the first entry in inclusion order, so the choice does not depend on the
   // (per-process seeded) iteration order of the caller's hash map.
@@ -42,6 +45,15 @@ void ClangIdLookupMap::forEachPathAndHash(
     ENFORCE(!valuePtr->hashToFileId.empty(),
             "Shouldn't have stored empty maps");
     callback(absPathRef, valuePtr->hashToFileId);
+  }
+}
+
+void ClangIdLookupMap::forEachPathAndFileId(
+    absl::FunctionRef<void(AbsolutePathRef, clang::FileID)> callback) const {
+  for (auto &[absPathRef, valuePtr] : this->impl) {
+    for (auto fileId : valuePtr->allFileIds) {
+      callback(absPathRef, fileId);
+    }
   }
 }
 
@@ -77,16 +89,17 @@ ClangIdLookupMap::lookupAnyFileId(AbsolutePathRef absPathRef) const {
 }
 
 void FileMetadataMap::populate(const ClangIdLookupMap &clangIdLookupMap) {
-  clangIdLookupMap.forEachPathAndHash( // force formatting break
-      [&](AbsolutePathRef absPathRef,
-          const absl::flat_hash_map<HashValue, clang::FileID> &map) {
-        for (auto &[hash, fileId] : map) {
-          bool inserted = this->insert(fileId, absPathRef);
-          ENFORCE(inserted,
-                  "there is a 1-1 mapping from FileID -> (path, hash) so the"
-                  " FileID {} for {} should not have been inserted earlier",
-                  fileId.getHashValue(), absPathRef.asStringView());
-        }
+  // Every FileID, not only each (path, hash)'s representative: a symbol is
+  // formed from the FileID its declaration or macro definition is in, and a
+  // FileID without metadata gives no symbol (declarations) or a raw-path
+  // one (macros).
+  clangIdLookupMap.forEachPathAndFileId( // force formatting break
+      [&](AbsolutePathRef absPathRef, clang::FileID fileId) {
+        bool inserted = this->insert(fileId, absPathRef);
+        ENFORCE(inserted,
+                "each FileID is recorded once, so the FileID {} for {}"
+                " should not have been inserted earlier",
+                fileId.getHashValue(), absPathRef.asStringView());
       });
 }
 
