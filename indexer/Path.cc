@@ -41,6 +41,13 @@ std::optional<std::string_view>
 AbsolutePathRef::makeRelative(AbsolutePathRef longerPath) {
   if (longerPath.value.starts_with(this->value)) {
     auto start = this->value.size();
+    // A string prefix is not a path prefix: /a/b is not inside /a/b-c.
+    if (start < longerPath.value.size() && !this->value.empty()
+        && this->value.back() != std::filesystem::path::preferred_separator
+        && longerPath.value[start]
+               != std::filesystem::path::preferred_separator) {
+      return {};
+    }
     while (start < longerPath.value.size()
            && longerPath.value[start]
                   == std::filesystem::path::preferred_separator) {
