@@ -62,6 +62,7 @@ std::strong_ordering compareOccurrences(const Occurrence &lhs,
   CMP_STR(lhs.symbol(), rhs.symbol());
   CMP_EXPR(lhs.symbol_roles(), rhs.symbol_roles());
   CMP_EXPR(lhs.syntax_kind(), rhs.syntax_kind());
+  CMP_CHECK(cmp::compareRange(lhs.enclosing_range(), rhs.enclosing_range()));
   CMP_CHECK(cmp::compareRange(lhs.override_documentation(),
                               rhs.override_documentation(),
                               [](const auto &d1s, const auto &d2s) {
@@ -101,6 +102,9 @@ void SymbolInformationBuilder::finish(bool deterministic,
                                       scip::SymbolInformation &out) {
   this->_bomb.defuse();
 
+  if (this->kind != scip::SymbolInformation::UnspecifiedKind) {
+    out.set_kind(this->kind);
+  }
   out.mutable_documentation()->Reserve(this->documentation.size());
   for (auto &doc : this->documentation) {
     *out.add_documentation() = std::move(doc);
@@ -188,10 +192,12 @@ void DocumentBuilder::merge(scip::Document &&doc) {
       SymbolInformationBuilder builder{
           name, std::move(*symbolInfo.mutable_documentation()),
           std::move(*symbolInfo.mutable_relationships())};
+      builder.mergeKind(symbolInfo.kind());
       this->symbolInfos.emplace(name, std::move(builder));
       continue;
     }
     auto &symbolInfoBuilder = it->second;
+    symbolInfoBuilder.mergeKind(symbolInfo.kind());
     if (!symbolInfoBuilder.hasDocumentation()) {
       auto &docs = *symbolInfo.mutable_documentation();
       symbolInfoBuilder.setDocumentation(std::move(docs));
@@ -285,6 +291,7 @@ void IndexBuilder::addExternalSymbolUnchecked(
   }
   auto builder = std::make_unique<SymbolInformationBuilder>(
       name, std::move(docs), std::move(rels));
+  builder->mergeKind(extSym.kind());
   this->externalSymbols.emplace(name, std::move(builder));
 }
 
@@ -299,6 +306,7 @@ void IndexBuilder::addExternalSymbol(scip::SymbolInformation &&extSym) {
   // Picking the first non-empty bit of documentation will be deterministic
   // so long as external symbols are added in a deterministic order.
   auto &builder = it->second;
+  builder->mergeKind(extSym.kind());
   if (!builder->hasDocumentation() && extSym.documentation_size() > 0) {
     builder->setDocumentation(std::move(*extSym.mutable_documentation()));
   }
