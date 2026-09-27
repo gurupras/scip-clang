@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/functional/function_ref.h"
@@ -31,10 +32,13 @@ namespace scip_clang {
 /// In general, it may be the case that multiple FileIDs correspond to
 /// the same (HashValue, Path) pair (this happens for well-behaved
 /// headers, c.f. \c FileIndexingPlanner); the representative FileID
-/// is chosen arbitrarily.
+/// is the smallest one. Every FileID is still recorded in \c allFileIds,
+/// so that each one gets metadata: symbols are formed from the FileID
+/// of a declaration, which need not be the representative.
 class ClangIdLookupMap {
   struct Value {
     absl::flat_hash_map<HashValue, clang::FileID> hashToFileId;
+    std::vector<clang::FileID> allFileIds;
   };
 
   absl::flat_hash_map<AbsolutePathRef, std::shared_ptr<Value>> impl;
@@ -49,6 +53,9 @@ public:
       absl::FunctionRef<void(AbsolutePathRef, const absl::flat_hash_map<
                                                   HashValue, clang::FileID> &)>
           callback) const;
+
+  void forEachPathAndFileId(
+      absl::FunctionRef<void(AbsolutePathRef, clang::FileID)> callback) const;
 
   std::optional<clang::FileID> lookup(AbsolutePathRef absPathRef,
                                       HashValue hashValue) const;
