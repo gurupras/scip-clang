@@ -47,6 +47,7 @@
 #include "indexer/Comparison.h"
 #include "indexer/CompilationDatabase.h"
 #include "indexer/Driver.h"
+#include "indexer/ExtraRoots.h"
 #include "indexer/FileSystem.h"
 #include "indexer/IpcMessages.h"
 #include "indexer/JsonIpcQueue.h"
@@ -212,6 +213,7 @@ struct DriverOptions {
   AbsolutePath indexOutputPath;
   AbsolutePath statsFilePath;
   AbsolutePath packageMapPath;
+  ExtraRoots extraRoots;
   bool showCompilerDiagnostics;
   bool showProgress;
   DriverIpcOptions ipcOptions;
@@ -232,6 +234,7 @@ struct DriverOptions {
       : workerExecutablePath(),
         projectRootPath(AbsolutePath("/"), RootKind::Project), compdbPath(),
         indexOutputPath(), statsFilePath(), packageMapPath(),
+        extraRoots(ExtraRoots::parse(cliOpts.extraRoots)),
         showCompilerDiagnostics(cliOpts.showCompilerDiagnostics),
         showProgress(cliOpts.showProgress),
         ipcOptions{cliOpts.ipcSizeHintBytes, cliOpts.receiveTimeout},
@@ -335,6 +338,9 @@ struct DriverOptions {
       args.push_back(
           fmt::format("--package-map-path={}", packageMapPath.asStringRef()));
     }
+    for (auto &spec : this->extraRoots.specs()) {
+      args.push_back(fmt::format("--extra-root={}", spec));
+    }
     if (this->noStacktrace) {
       args.push_back("--no-stack-trace");
     }
@@ -399,10 +405,13 @@ struct TusIndexedCount {
 class FileIndexingPlanner {
   absl::flat_hash_map<AbsolutePath, absl::flat_hash_set<HashValue>> hashesSoFar;
   const RootPath &projectRootPath;
+  const ExtraRoots *extraRoots;
 
 public:
-  FileIndexingPlanner(const RootPath &projectRootPath)
-      : hashesSoFar(), projectRootPath(projectRootPath) {}
+  FileIndexingPlanner(const RootPath &projectRootPath,
+                      const ExtraRoots *extraRoots = nullptr)
+      : hashesSoFar(), projectRootPath(projectRootPath),
+        extraRoots(extraRoots) {}
   FileIndexingPlanner(FileIndexingPlanner &&) = default;
   FileIndexingPlanner(const FileIndexingPlanner &) = delete;
 
@@ -441,7 +450,15 @@ public:
   };
 
   MultiplyIndexed isMultiplyIndexed(RootRelativePathRef relativePath) const {
-    auto absPath = this->projectRootPath.makeAbsolute(relativePath);
+    // A document under an extra root carries its prefix, not a path under
+    // the project root (patch J).
+    std::optional<std::string> extra;
+    if (this->extraRoots != nullptr) {
+      extra = this->extraRoots->absolutize(relativePath.asStringView());
+    }
+    auto absPath = extra.has_value()
+                       ? AbsolutePath(std::move(*extra))
+                       : this->projectRootPath.makeAbsolute(relativePath);
     auto it = this->hashesSoFar.find(absPath);
     if (it == this->hashesSoFar.end()) {
       spdlog::warn("found path '{}' with no recorded hashes; this is likely a "
@@ -927,7 +944,8 @@ public:
 
   Driver(std::string driverId, DriverOptions &&options)
       : options(std::move(options)), id(driverId), scheduler(),
-        planner(this->options.projectRootPath), shardPaths(), compdbParser() {
+        planner(this->options.projectRootPath, &this->options.extraRoots),
+        shardPaths(), compdbParser() {
     MessageQueues::deleteIfPresent(this->id, this->numWorkers());
     this->queues = MessageQueues(this->id, this->numWorkers(),
                                  options.ipcOptions.ipcSizeHintBytes);

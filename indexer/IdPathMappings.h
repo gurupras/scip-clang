@@ -10,6 +10,7 @@
 
 #include "clang/Basic/SourceLocation.h"
 
+#include "indexer/ExtraRoots.h"
 #include "indexer/FileMetadata.h"
 #include "indexer/Hash.h"
 #include "indexer/LlvmAdapter.h"
@@ -88,12 +89,15 @@ class FileMetadataMap final {
 
   PackageMap &packageMap;
 
+  const ExtraRoots *extraRoots;
+
 public:
   FileMetadataMap() = delete;
   FileMetadataMap(const RootPath &projectRootPath,
-                  const RootPath &buildRootPath, PackageMap &packageMap)
+                  const RootPath &buildRootPath, PackageMap &packageMap,
+                  const ExtraRoots *extraRoots = nullptr)
       : map(), projectRootPath(projectRootPath), buildRootPath(buildRootPath),
-        packageMap(packageMap) {}
+        packageMap(packageMap), extraRoots(extraRoots) {}
   FileMetadataMap(FileMetadataMap &&other) = default;
   FileMetadataMap &operator=(FileMetadataMap &&) = delete;
   FileMetadataMap(const FileMetadataMap &) = delete;

@@ -58,6 +58,12 @@ static scip_clang::CliOptions parseArguments(int argc, char *argv[]) {
     "Suppress progress information reported after a TU is indexed",
     cxxopts::value<bool>());
   parser.add_options(defaultGroup)(
+    "extra-root",
+    "<dir>=<prefix>: index files under <dir>, outside the project root, as"
+    " project files at <prefix>/<path relative to dir>. Repeatable; the"
+    " longest matching dir wins. <dir> must not contain a comma.",
+    cxxopts::value<std::vector<std::string>>(cliOptions.extraRoots));
+  parser.add_options(defaultGroup)(
     "show-compiler-diagnostics",
     "Show Clang diagnostics triggered when running semantic analysis."
     " Useful for debugging issues related to missing headers.",

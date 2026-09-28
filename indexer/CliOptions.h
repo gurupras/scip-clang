@@ -31,6 +31,8 @@ struct CliOptions {
   std::string indexOutputPath;
   std::string statsFilePath;
   std::string packageMapPath;
+  // --extra-root=<dir>=<prefix> values (Alexandria patch J).
+  std::vector<std::string> extraRoots;
   bool showCompilerDiagnostics;
   bool showProgress;
 
