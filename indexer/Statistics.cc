@@ -9,12 +9,18 @@ namespace scip_clang {
 
 llvm::json::Value toJSON(const StatsEntry &entry) {
   auto &stats = entry.stats;
-  return llvm::json::Object{
+  llvm::json::Value value = llvm::json::Object{
       {"filepath", entry.path},
       {"stats",
        llvm::json::Object{
            {"total_time_s", double(stats.totalTimeMicros) / 1'000'000.0},
        }}};
+  if (stats.diagnosticsCounted) {
+    auto &obj = *value.getAsObject()->getObject("stats");
+    obj["errors"] = stats.numErrors;
+    obj["fatal_errors"] = stats.numFatalErrors;
+  }
+  return value;
 }
 
 // static

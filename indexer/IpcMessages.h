@@ -178,6 +178,15 @@ SERIALIZABLE(SemanticAnalysisJobResult)
 
 struct IndexingStatistics {
   uint64_t totalTimeMicros;
+  // Compiler diagnostics of level error or fatal in this TU, counted by the
+  // worker's diagnostic consumer. Clang still runs semantic analysis after a
+  // fatal error (e.g. a missing #include), so a TU with errors gets a
+  // document that silently lacks everything after the failure. Only valid
+  // when diagnosticsCounted: with --show-compiler-diagnostics clang's own
+  // printer is used and nothing is counted (never reported as zero).
+  uint64_t numErrors;
+  uint64_t numFatalErrors;
+  bool diagnosticsCounted;
 };
 SERIALIZABLE(IndexingStatistics)
 
