@@ -68,4 +68,22 @@
            && mapper.map(#_Field2, t._Field2);                \
   }
 
+#define DERIVE_SERIALIZE_4(_Type, _Field1, _Field2, _Field3, _Field4) \
+  llvm::json::Value toJSON(const _Type &t) {                         \
+    return llvm::json::Object{                                       \
+        {#_Field1, t._Field1},                                       \
+        {#_Field2, t._Field2},                                       \
+        {#_Field3, t._Field3},                                       \
+        {#_Field4, t._Field4},                                       \
+    };                                                               \
+  }                                                                  \
+  bool fromJSON(const llvm::json::Value &jsonValue, _Type &t,        \
+                llvm::json::Path path) {                             \
+    llvm::json::ObjectMapper mapper(jsonValue, path);                \
+    return mapper && mapper.map(#_Field1, t._Field1)                 \
+           && mapper.map(#_Field2, t._Field2)                        \
+           && mapper.map(#_Field3, t._Field3)                        \
+           && mapper.map(#_Field4, t._Field4);                       \
+  }
+
 #endif // SCIP_CLANG_DERIVE_H

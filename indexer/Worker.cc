@@ -82,10 +82,18 @@ public:
   }
 };
 
+// Prints nothing, but counts: the base class tallies errors (level error
+// and fatal), and fatal errors are counted separately.
 class SuppressDiagnosticConsumer : public clang::DiagnosticConsumer {
 public:
-  void HandleDiagnostic(clang::DiagnosticsEngine::Level,
-                        const clang::Diagnostic &) override {}
+  uint64_t numFatalErrors = 0;
+  void HandleDiagnostic(clang::DiagnosticsEngine::Level level,
+                        const clang::Diagnostic &info) override {
+    clang::DiagnosticConsumer::HandleDiagnostic(level, info);
+    if (level == clang::DiagnosticsEngine::Fatal) {
+      this->numFatalErrors++;
+    }
+  }
 };
 
 } // namespace
@@ -244,6 +252,14 @@ void Worker::processTranslationUnit(SemanticAnalysisJobDetails &&job,
     bool ranSuccessfully = invocation.run();
     (void)ranSuccessfully;
   }
+  this->statistics.diagnosticsCounted =
+      !this->options.showCompilerDiagnostics;
+  this->statistics.numErrors =
+      this->statistics.diagnosticsCounted ? suppressDiagnostics.getNumErrors()
+                                          : 0;
+  this->statistics.numFatalErrors = this->statistics.diagnosticsCounted
+                                        ? suppressDiagnostics.numFatalErrors
+                                        : 0;
 }
 
 void Worker::emitIndex(google::protobuf::Message &&message,

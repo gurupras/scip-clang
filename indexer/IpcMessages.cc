@@ -128,7 +128,8 @@ bool fromJSON(const llvm::json::Value &jsonValue, HashValue &h,
   return false;
 }
 
-DERIVE_SERIALIZE_1_NEWTYPE(scip_clang::IndexingStatistics, totalTimeMicros)
+DERIVE_SERIALIZE_4(scip_clang::IndexingStatistics, totalTimeMicros, numErrors,
+                   numFatalErrors, diagnosticsCounted)
 DERIVE_SERIALIZE_1_NEWTYPE(scip_clang::EmitIndexJobDetails, filesToBeIndexed)
 DERIVE_SERIALIZE_1_NEWTYPE(scip_clang::IpcTestMessage, content)
 DERIVE_SERIALIZE_1_NEWTYPE(scip_clang::SemanticAnalysisJobDetails, command)
