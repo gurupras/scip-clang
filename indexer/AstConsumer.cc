@@ -195,9 +195,9 @@ void IndexerAstConsumer::HandleTranslationUnit(clang::ASTContext &astContext) {
     return;
   }
 
-  FileMetadataMap fileMetadataMap{this->options.projectRootPath,
-                                  this->options.buildRootPath,
-                                  this->options.packageMap};
+  FileMetadataMap fileMetadataMap{
+      this->options.projectRootPath, this->options.buildRootPath,
+      this->options.packageMap, this->options.extraRoots};
   FileIdsToBeIndexedSet toBeIndexed{};
   this->computeFileIdsToBeIndexed(astContext, emitIndexDetails,
                                   clangIdLookupMap, fileMetadataMap,

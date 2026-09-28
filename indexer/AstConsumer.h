@@ -11,6 +11,7 @@
 #include "proto/fwd_decls.pb.h"
 #include "scip/scip.pb.h"
 
+#include "indexer/ExtraRoots.h"
 #include "indexer/IpcMessages.h"
 #include "indexer/LlvmAdapter.h"
 #include "indexer/Path.h"
@@ -43,6 +44,7 @@ struct IndexerAstConsumerOptions {
   WorkerCallback getEmitIndexDetails;
   bool deterministic;
   PackageMap &packageMap;
+  const ExtraRoots *extraRoots = nullptr; // patch J
 };
 
 struct TuIndexingOutput {

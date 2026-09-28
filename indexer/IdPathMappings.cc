@@ -209,6 +209,15 @@ bool FileMetadataMap::insert(clang::FileID fileId, AbsolutePathRef absPathRef) {
     }
   }
 
+  // Patch J: a file under a declared extra root is a project file at its
+  // prefixed path, not an "<external>" one.
+  if (this->extraRoots != nullptr) {
+    if (auto optRel = this->extraRoots->relativize(absPathRef.asStringView())) {
+      this->storage.emplace_back(std::move(*optRel), RootKind::Project);
+      return insertRelPath(this->storage.back().asRef(), /*isInProject*/ true);
+    }
+  }
+
   auto optFileName = absPathRef.fileName();
   ENFORCE(optFileName.has_value(),
           "Clang returned file path {} without a file name",

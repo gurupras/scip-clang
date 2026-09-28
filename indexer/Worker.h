@@ -13,6 +13,7 @@
 #include "llvm/Support/YAMLTraits.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "indexer/ExtraRoots.h"
 #include "indexer/AstConsumer.h"
 #include "indexer/CliOptions.h"
 #include "indexer/CompilationDatabase.h"
@@ -66,6 +67,7 @@ struct WorkerOptions {
   PreprocessorHistoryRecordingOptions recordingOptions;
   StdPath temporaryOutputDir;
   std::string workerFault;
+  ExtraRoots extraRoots{}; // patch J
 
   // This is a static method instead of a constructor so that the
   // implicit memberwise initializer is synthesized and available

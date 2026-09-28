@@ -135,7 +135,8 @@ WorkerOptions WorkerOptions::fromCliOptions(const CliOptions &cliOptions) {
                            cliOptions.preprocessorRecordHistoryFilterRegex,
                            cliOptions.preprocessorHistoryLogPath, false, ""},
                        cliOptions.temporaryOutputDir,
-                       cliOptions.workerFault};
+                       cliOptions.workerFault,
+                       ExtraRoots::parse(cliOptions.extraRoots)};
 }
 
 Worker::Worker(WorkerOptions &&options)
@@ -234,7 +235,7 @@ void Worker::processTranslationUnit(SemanticAnalysisJobDetails &&job,
       this->options.deterministic};
   IndexerAstConsumerOptions astConsumerOptions{
       this->options.projectRootPath, buildRootPath, std::move(workerCallback),
-      this->options.deterministic, this->packageMap};
+      this->options.deterministic, this->packageMap, &this->options.extraRoots};
   auto frontendActionFactory = IndexerFrontendActionFactory(
       preprocessorOptions, astConsumerOptions, tuIndexingOutput);
 
