@@ -104,8 +104,8 @@ struct ClangToolchainInfo : public ToolchainInfo {
     return CompilerKind::Clang;
   }
 
-  virtual bool isWellFormed() const override {
-    if (!std::filesystem::exists(this->resourceDir)) {
+  virtual bool isWellFormed(bool resourceDirOverridden) const override {
+    if (!resourceDirOverridden && !std::filesystem::exists(this->resourceDir)) {
       spdlog::error(
           "clang resource directory '{}' does not exist (obtained via {})",
           this->resourceDir, fmt::join(this->findResourceDirInvocation, " "));
@@ -120,12 +120,14 @@ struct ClangToolchainInfo : public ToolchainInfo {
     return true;
   }
 
-  virtual void
-  adjustCommandLine(std::vector<std::string> &commandLine) const override {
+  virtual void adjustCommandLine(std::vector<std::string> &commandLine,
+                                 bool resourceDirOverridden) const override {
     commandLine[0] = this->compilerDriverPath;
     this->cleaner->clean(commandLine);
-    commandLine.push_back("-resource-dir");
-    commandLine.push_back(this->resourceDir);
+    if (!resourceDirOverridden) {
+      commandLine.push_back("-resource-dir");
+      commandLine.push_back(this->resourceDir);
+    }
   }
 
   static std::unique_ptr<ClangToolchainInfo>
@@ -193,8 +195,8 @@ struct GccToolchainInfo : public ToolchainInfo {
     return CompilerKind::Gcc;
   }
 
-  virtual bool isWellFormed() const override {
-    if (!std::filesystem::exists(this->installDir)) {
+  virtual bool isWellFormed(bool resourceDirOverridden) const override {
+    if (!resourceDirOverridden && !std::filesystem::exists(this->installDir)) {
       spdlog::error(
           "GCC install directory '{}' does not exist (obtained via {})",
           this->installDir, fmt::join(this->findInstallDirInvocation, " "));
@@ -203,9 +205,14 @@ struct GccToolchainInfo : public ToolchainInfo {
     return true;
   }
 
-  virtual void
-  adjustCommandLine(std::vector<std::string> &commandLine) const override {
+  virtual void adjustCommandLine(std::vector<std::string> &commandLine,
+                                 bool resourceDirOverridden) const override {
     this->cleaner->clean(commandLine);
+    if (resourceDirOverridden) {
+      // --resource-dir supplies the builtin headers, limits.h included, so
+      // GCC's install dir and its include-fixed must not shadow them.
+      return;
+    }
     commandLine.push_back("-resource-dir");
     commandLine.push_back(this->installDir);
     // gcc-7 adds headers like limits.h and syslimits.h in include-fixed
@@ -407,7 +414,7 @@ struct NvccToolchainInfo : public ToolchainInfo {
     return CompilerKind::Nvcc;
   }
 
-  virtual bool isWellFormed() const override {
+  virtual bool isWellFormed(bool) const override {
     auto path = scip_clang::joinPath(cudaDir.asStringRef(), "include");
     if (!std::filesystem::exists(path)) {
       spdlog::error(
@@ -421,11 +428,11 @@ struct NvccToolchainInfo : public ToolchainInfo {
     return true;
   }
 
-  virtual void
-  adjustCommandLine(std::vector<std::string> &commandLine) const override {
+  virtual void adjustCommandLine(std::vector<std::string> &commandLine,
+                                 bool resourceDirOverridden) const override {
     this->cleaner.clean(commandLine);
     if (this->clangInfo) {
-      this->clangInfo->adjustCommandLine(commandLine);
+      this->clangInfo->adjustCommandLine(commandLine, resourceDirOverridden);
     }
     commandLine.push_back(
         fmt::format("-isystem{}{}include", this->cudaDir.asStringRef(),
@@ -912,12 +919,50 @@ compdb::File::openAndExitOnErrors(const StdPath &path,
   return compdbFile;
 }
 
+void overrideResourceDir(std::vector<std::string> &commandLine,
+                         const std::string &dir) {
+  std::vector<std::string> out;
+  out.reserve(commandLine.size() + 2);
+  auto isJoined = [](const std::string &arg) {
+    return arg.starts_with("-resource-dir=");
+  };
+  for (size_t i = 0; i < commandLine.size(); ++i) {
+    auto &arg = commandLine[i];
+    if (arg == "-Xclang" && i + 1 < commandLine.size()) {
+      auto &next = commandLine[i + 1];
+      if (next == "-resource-dir") {
+        // -Xclang -resource-dir -Xclang <dir>: all four tokens.
+        i += (i + 3 < commandLine.size() && commandLine[i + 2] == "-Xclang")
+                 ? 3
+                 : 1;
+        continue;
+      }
+      if (isJoined(next)) {
+        ++i; // -Xclang -resource-dir=<dir>
+        continue;
+      }
+    }
+    if (arg == "-resource-dir") {
+      ++i; // and its value, when there is one
+      continue;
+    }
+    if (isJoined(arg)) {
+      continue;
+    }
+    out.push_back(std::move(arg));
+  }
+  out.push_back("-resource-dir");
+  out.push_back(dir);
+  commandLine = std::move(out);
+}
+
 // static
 ParseOptions ParseOptions::create(size_t refillCount, bool forTesting) {
   ENFORCE(refillCount > 0);
   return ParseOptions{refillCount, /*adjustCommandLine*/ !forTesting,
                       /*skipNonMainFileTuEntries*/ !forTesting,
-                      /*checkFilesExist*/ !forTesting};
+                      /*checkFilesExist*/ !forTesting,
+                      /*resourceDirOverride*/ ""};
 }
 
 void ResumableParser::initialize(compdb::File compdb, ParseOptions options) {
@@ -1020,18 +1065,22 @@ void ResumableParser::parseMore(std::vector<compdb::CommandObject> &out) {
         continue;
       }
       this->adjustCommandLine(cmd.workingDirectory, cmd.arguments);
+      if (!this->options.resourceDirOverride.empty()) {
+        overrideResourceDir(cmd.arguments, this->options.resourceDirOverride);
+      }
     }
   }
 }
 
 void ResumableParser::adjustCommandLine(const std::string &directoryPath,
                                         std::vector<std::string> &commandLine) {
+  bool overridden = !this->options.resourceDirOverride.empty();
   auto &compilerOrWrapperPath = commandLine.front();
   auto it = this->toolchainInfoMap.find(compilerOrWrapperPath);
   if (it != this->toolchainInfoMap.end()) {
     auto &toolchain = it->second;
     if (toolchain) {
-      toolchain->adjustCommandLine(commandLine);
+      toolchain->adjustCommandLine(commandLine, overridden);
     }
     return;
   }
@@ -1076,14 +1125,14 @@ void ResumableParser::adjustCommandLine(const std::string &directoryPath,
     return fail();
   }
   auto optToolchainInfo = ToolchainInfo::infer(compilerInvocationPath);
-  if (!optToolchainInfo || !optToolchainInfo->isWellFormed()) {
+  if (!optToolchainInfo || !optToolchainInfo->isWellFormed(overridden)) {
     return fail();
   }
 
   auto [newIt, inserted] = this->toolchainInfoMap.emplace(
       compilerOrWrapperPath, std::move(optToolchainInfo));
   ENFORCE(inserted);
-  newIt->second->adjustCommandLine(commandLine);
+  newIt->second->adjustCommandLine(commandLine, overridden);
 }
 
 void ResumableParser::emitError(std::string &&error) {

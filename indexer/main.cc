@@ -44,6 +44,15 @@ static scip_clang::CliOptions parseArguments(int argc, char *argv[]) {
     "Path to use for path->package mappings in JSON format.",
     cxxopts::value<std::string>(cliOptions.packageMapPath));
   parser.add_options(defaultGroup)(
+    "resource-dir",
+    "Absolute path of the Clang resource directory (builtin headers, e.g."
+    " <llvm>/lib/clang/<major>) to use for every compilation, in place of the"
+    " one inferred from each compiler and any -resource-dir (or -Xclang"
+    " -resource-dir) in the compilation database. Response files (@file) and"
+    " clang-cl /clang: options are not inspected. Not supported with"
+    " --worker-mode=compdb.",
+    cxxopts::value<std::string>(cliOptions.resourceDir));
+  parser.add_options(defaultGroup)(
     "j,jobs",
     fmt::format(
       "Upper bound for number of indexing processes to run in parallel (default: NCPUs = {})",
@@ -199,6 +208,10 @@ static scip_clang::CliOptions parseArguments(int argc, char *argv[]) {
       && cliOptions.workerMode != "compdb"
       && cliOptions.workerMode != "testing") {
     spdlog::error("--worker-mode must be 'ipc', 'compdb' or 'testing'");
+    std::exit(EXIT_FAILURE);
+  }
+  if (cliOptions.workerMode == "compdb" && !cliOptions.resourceDir.empty()) {
+    spdlog::error("--resource-dir is not supported with --worker-mode=compdb");
     std::exit(EXIT_FAILURE);
   }
 
