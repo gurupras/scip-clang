@@ -31,6 +31,9 @@ struct CliOptions {
   std::string indexOutputPath;
   std::string statsFilePath;
   std::string packageMapPath;
+  // --package-map-partial: a package map need not name the project; files
+  // it does not cover keep the names they have without a map.
+  bool packageMapPartial = false;
   // --resource-dir=<dir>: the one resource directory every analysis uses.
   std::string resourceDir;
   bool showCompilerDiagnostics;

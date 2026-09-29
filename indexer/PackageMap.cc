@@ -54,9 +54,10 @@ bool fromJSON(const llvm::json::Value &jsonValue, ::PackageMapEntry &entry,
 namespace scip_clang {
 
 PackageMap::PackageMap(const RootPath &projectRootPath,
-                       const StdPath &packageMapPath, bool isTesting)
+                       const StdPath &packageMapPath, bool isTesting,
+                       bool partial)
     : storage(), interner(this->storage), map(), warnedBadPaths(),
-      projectRootPath(projectRootPath), isTesting(isTesting) {
+      projectRootPath(projectRootPath), isTesting(isTesting), partial(partial) {
   if (!packageMapPath.empty()) {
     this->populate(packageMapPath);
   }
@@ -85,6 +86,11 @@ void PackageMap::populate(const StdPath &packageMapPath) {
         "package map had size 0, make sure to add one entry per package");
     std::exit(EXIT_FAILURE);
   }
+  llvm::SmallString<256> projectBuf{};
+  std::string projectReal(this->projectRootPath.asRef().asStringView());
+  if (!llvm::sys::fs::real_path(projectReal, projectBuf)) {
+    projectReal = std::string(projectBuf.str());
+  }
   llvm::SmallString<256> buf{};
   bool foundMainPackageMetadata = false;
   for (auto &packageMapEntry : vecOrError.get()) {
@@ -93,6 +99,34 @@ void PackageMap::populate(const StdPath &packageMapPath) {
       spdlog::error("could not resolve path '{}' in package map: {}",
                     packageMapEntry.rootPath, error.message());
       continue;
+    }
+    if (llvm::sys::path::is_absolute(packageMapEntry.rootPath)
+        && std::string_view(buf.str()) != packageMapEntry.rootPath) {
+      // Lookups compare real paths: a compile command must spell the real
+      // path too, or its files miss this entry.
+      spdlog::warn("package map path '{}' resolves to '{}'; files are matched "
+                   "by the resolved path",
+                   packageMapEntry.rootPath, std::string_view(buf.str()));
+    }
+    switch (placeEntry(buf.str(), projectReal)) {
+    case EntryPlacement::Ancestor:
+      if (this->partial) {
+        // Without the project's own entry, an ancestor claims every project
+        // file for its package: the project would get no document at all.
+        spdlog::error("package map path '{}' contains the project root '{}'; "
+                      "with --package-map-partial an entry must not contain "
+                      "the project",
+                      std::string_view(buf.str()), projectReal);
+        std::exit(EXIT_FAILURE);
+      }
+      break;
+    case EntryPlacement::Inside:
+      spdlog::warn("package map path '{}' lies inside the project root '{}': "
+                   "its files leave the project's package and coverage",
+                   std::string_view(buf.str()), projectReal);
+      break;
+    default:
+      break;
     }
     if (!llvm::sys::fs::is_directory(buf)) {
       spdlog::warn("path '{}' in package map is not a directory (or a symlink "
@@ -134,7 +168,12 @@ void PackageMap::populate(const StdPath &packageMapPath) {
       }
     }
   }
-  if (!foundMainPackageMetadata) {
+  if (!foundMainPackageMetadata && this->partial) {
+    spdlog::info("package map with {} entries and none for the project "
+                 "(--package-map-partial): files under no entry keep their "
+                 "names",
+                 this->map.size());
+  } else if (!foundMainPackageMetadata) {
     spdlog::error(
         "missing package information for the current project in package map");
     spdlog::info(
@@ -143,6 +182,32 @@ void PackageMap::populate(const StdPath &packageMapPath) {
         this->projectRootPath.asRef().asStringView(), packageMapPath.string());
     std::exit(EXIT_FAILURE);
   }
+}
+
+EntryPlacement placeEntry(std::string_view entry,
+                          std::string_view projectRoot) {
+  auto trim = [](std::string_view p) {
+    while (p.size() > 1 && p.back() == '/') {
+      p.remove_suffix(1);
+    }
+    return p;
+  };
+  entry = trim(entry);
+  projectRoot = trim(projectRoot);
+  auto within = [](std::string_view inner, std::string_view outer) {
+    return inner.size() > outer.size() && inner.starts_with(outer)
+           && (outer == "/" || inner[outer.size()] == '/');
+  };
+  if (entry == projectRoot) {
+    return EntryPlacement::Project;
+  }
+  if (within(projectRoot, entry)) {
+    return EntryPlacement::Ancestor;
+  }
+  if (within(entry, projectRoot)) {
+    return EntryPlacement::Inside;
+  }
+  return EntryPlacement::Outside;
 }
 
 std::string_view PackageMap::store(std::string_view p) {

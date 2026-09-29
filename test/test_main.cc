@@ -29,6 +29,7 @@
 #include "indexer/CompilationDatabase.h"
 #include "indexer/Enforce.h"
 #include "indexer/FileSystem.h"
+#include "indexer/PackageMap.h"
 #include "indexer/Worker.h"
 
 #include "test/Snapshot.h"
@@ -160,6 +161,50 @@ TEST_CASE("UNIT_TESTS") {
                                     own.begin(), own.end() - added.size()),
                   fmt::format("with --resource-dir: {}",
                               fmt::join(overridden, " ")));
+    fs::remove_all(tmp);
+  }
+  {
+    // --package-map-partial: a map naming only an external directory is
+    // accepted; a file it covers gets its package, any other file (the
+    // project's included) none, as without a package map.
+    namespace fs = std::filesystem;
+    const char *testTmp = std::getenv("TEST_TMPDIR");
+    auto base = fs::path(testTmp ? testTmp : fs::temp_directory_path().c_str());
+    fs::create_directories(base);
+    // Real paths: the map is keyed by them, and $TEST_TMPDIR may be a link.
+    auto tmp = fs::canonical(base) / "scip-clang-partial-map";
+    fs::remove_all(tmp);
+    fs::create_directories(tmp / "proj");
+    fs::create_directories(tmp / "ext");
+    auto mapPath = tmp / "map.json";
+    std::ofstream(mapPath) << fmt::format(
+        R"([{{"path": "{}", "package": "ext@1"}}])", (tmp / "ext").string());
+    PackageMap packageMap(
+        RootPath{AbsolutePath((tmp / "proj").string()), RootKind::Project},
+        mapPath, /*isTesting*/ false, /*partial*/ true);
+    std::string extFile = (tmp / "ext" / "h.h").string();
+    std::string ownFile = (tmp / "proj" / "t.cc").string();
+    auto ext = packageMap.lookup(
+        AbsolutePathRef::tryFrom(std::string_view(extFile)).value());
+    REQUIRE(ext.has_value());
+    CHECK(ext->id.name == "ext");
+    CHECK(ext->id.version == "1");
+    CHECK(!ext->isMainPackage);
+    auto own = packageMap.lookup(
+        AbsolutePathRef::tryFrom(std::string_view(ownFile)).value());
+    CHECK_MESSAGE(!own.has_value(),
+                  "a project file got a package from a partial map");
+    // Where an entry lies relative to the project root (review L-A, L-B):
+    // an ancestor is refused under --package-map-partial, an entry inside is
+    // warned about, by path component.
+    using scip_clang::EntryPlacement;
+    CHECK(scip_clang::placeEntry("/a/b", "/a/b") == EntryPlacement::Project);
+    CHECK(scip_clang::placeEntry("/a/b/", "/a/b") == EntryPlacement::Project);
+    CHECK(scip_clang::placeEntry("/a", "/a/b") == EntryPlacement::Ancestor);
+    CHECK(scip_clang::placeEntry("/", "/a/b") == EntryPlacement::Ancestor);
+    CHECK(scip_clang::placeEntry("/a/b/c", "/a/b") == EntryPlacement::Inside);
+    CHECK(scip_clang::placeEntry("/a/bc", "/a/b") == EntryPlacement::Outside);
+    CHECK(scip_clang::placeEntry("/a/x", "/a/b") == EntryPlacement::Outside);
     fs::remove_all(tmp);
   }
   struct HeaderFilterTestCase {
