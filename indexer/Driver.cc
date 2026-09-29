@@ -36,6 +36,7 @@
 #include "spdlog/sinks/stdout_sinks.h"
 #include "spdlog/spdlog.h"
 
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/StringSaver.h"
@@ -212,6 +213,7 @@ struct DriverOptions {
   AbsolutePath indexOutputPath;
   AbsolutePath statsFilePath;
   AbsolutePath packageMapPath;
+  std::string resourceDir;
   bool showCompilerDiagnostics;
   bool showProgress;
   DriverIpcOptions ipcOptions;
@@ -232,6 +234,7 @@ struct DriverOptions {
       : workerExecutablePath(),
         projectRootPath(AbsolutePath("/"), RootKind::Project), compdbPath(),
         indexOutputPath(), statsFilePath(), packageMapPath(),
+        resourceDir(cliOpts.resourceDir),
         showCompilerDiagnostics(cliOpts.showCompilerDiagnostics),
         showProgress(cliOpts.showProgress),
         ipcOptions{cliOpts.ipcSizeHintBytes, cliOpts.receiveTimeout},
@@ -288,6 +291,28 @@ struct DriverOptions {
     setAbsolutePath(cliOpts.compdbPath, this->compdbPath);
     setAbsolutePath(cliOpts.statsFilePath, this->statsFilePath);
     setAbsolutePath(cliOpts.packageMapPath, this->packageMapPath);
+    if (!this->resourceDir.empty()) {
+      // Canonical spelling, so /x/21/ and /x/./21 name one directory (the
+      // path enters external file names); no realpath, which would discard
+      // the caller's chosen spelling.
+      llvm::SmallString<256> dir(this->resourceDir);
+      llvm::sys::path::remove_dots(dir, /*remove_dot_dot=*/true);
+      this->resourceDir = std::string(dir.str());
+      while (this->resourceDir.size() > 1
+             && this->resourceDir.back()
+                    == std::filesystem::path::preferred_separator) {
+        this->resourceDir.pop_back();
+      }
+      auto marker = scip_clang::joinPath(
+          this->resourceDir, scip_clang::joinPath("include", "stddef.h"));
+      if (!llvm::sys::path::is_absolute(this->resourceDir)
+          || !std::filesystem::exists(marker)) {
+        spdlog::error("--resource-dir '{}' is not an absolute path to a Clang"
+                      " resource directory (no {})",
+                      this->resourceDir, marker);
+        std::exit(EXIT_FAILURE);
+      }
+    }
 
     auto makeDirs = [](const StdPath &path, const char *name) {
       std::error_code error;
@@ -1262,10 +1287,12 @@ private:
                   this->compdbCommandCount);
 
     // FIXME(def: resource-dir-extra): If we're passed in a resource dir
-    // as an extra argument, we should not pass it here.
-    this->compdbParser.initialize(
-        compdbFile, compdb::ParseOptions::create(this->refillCount(),
-                                                 this->options.isTesting));
+    // as an extra argument, we should not pass it here. (Still applies when
+    // --resource-dir is unset; --resource-dir overrides every resource dir.)
+    auto parseOptions = compdb::ParseOptions::create(this->refillCount(),
+                                                     this->options.isTesting);
+    parseOptions.resourceDirOverride = this->options.resourceDir;
+    this->compdbParser.initialize(compdbFile, std::move(parseOptions));
     return FileGuard(compdbFile.file);
   }
 

@@ -31,6 +31,8 @@ struct CliOptions {
   std::string indexOutputPath;
   std::string statsFilePath;
   std::string packageMapPath;
+  // --resource-dir=<dir>: the one resource directory every analysis uses.
+  std::string resourceDir;
   bool showCompilerDiagnostics;
   bool showProgress;
 

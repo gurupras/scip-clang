@@ -117,10 +117,12 @@ struct ToolchainInfo {
 
   /// Potentially logs some error messages and/or warnings.
   /// The method should return true iff some errors are logged.
-  virtual bool isWellFormed() const = 0;
+  /// resourceDirOverridden: --resource-dir is set, so the toolchain's own
+  /// resource directory is neither checked nor passed.
+  virtual bool isWellFormed(bool resourceDirOverridden) const = 0;
 
-  virtual void
-  adjustCommandLine(std::vector<std::string> &commandLine) const = 0;
+  virtual void adjustCommandLine(std::vector<std::string> &commandLine,
+                                 bool resourceDirOverridden) const = 0;
 
   virtual ~ToolchainInfo() = default;
 
@@ -144,11 +146,22 @@ struct ToolchainInfo {
 /// parsed in a streaming fashion, chaining the two layers would be
 /// a bit more fiddly from the caller side, so we keep the filtering
 /// options in the parser itself.
+/// Drops every resource-dir option from commandLine (-resource-dir <d>,
+/// -resource-dir=<d>, and their -Xclang pass-through forms
+/// -Xclang -resource-dir -Xclang <d> and -Xclang -resource-dir=<d>), then
+/// appends -resource-dir <dir>. Response files (@file) and clang-cl
+/// /clang: options are not inspected.
+void overrideResourceDir(std::vector<std::string> &commandLine,
+                         const std::string &dir);
+
 struct ParseOptions {
   size_t refillCount;
   bool adjustCommandLine;
   bool skipNonMainFileEntries;
   bool checkFilesExist;
+  // Non-empty: the one resource directory of every adjusted command line
+  // (--resource-dir); see overrideResourceDir.
+  std::string resourceDirOverride;
 
   static ParseOptions create(size_t refillCount, bool forTesting = false);
 };

@@ -82,6 +82,86 @@ TEST_CASE("UNIT_TESTS") {
   if (test::globalCliOptions.testKind != test::Kind::UnitTests) {
     return;
   }
+  {
+    // --resource-dir: every resource-dir spelling is dropped and exactly one
+    // -resource-dir <dir> is appended.
+    struct ResourceDirTestCase {
+      std::vector<std::string> in;
+      std::vector<std::string> want;
+    };
+    std::vector<ResourceDirTestCase> cases{
+        {{"clang", "-resource-dir", "/a", "-c", "x.cc"},
+         {"clang", "-c", "x.cc", "-resource-dir", "/r"}},
+        {{"clang", "-resource-dir=/a", "-c", "x.cc"},
+         {"clang", "-c", "x.cc", "-resource-dir", "/r"}},
+        {{"clang", "-Xclang", "-resource-dir", "-Xclang", "/a", "-c", "x.cc"},
+         {"clang", "-c", "x.cc", "-resource-dir", "/r"}},
+        {{"clang", "-Xclang", "-resource-dir=/a", "-c", "x.cc"},
+         {"clang", "-c", "x.cc", "-resource-dir", "/r"}},
+        {{"clang", "-c", "x.cc", "-resource-dir"},
+         {"clang", "-c", "x.cc", "-resource-dir", "/r"}},
+        {{"clang", "-Xclang", "-ast-dump", "-c", "x.cc"},
+         {"clang", "-Xclang", "-ast-dump", "-c", "x.cc", "-resource-dir",
+          "/r"}},
+        {{"clang", "-c", "x.cc"},
+         {"clang", "-c", "x.cc", "-resource-dir", "/r"}},
+    };
+    for (auto &c : cases) {
+      auto in = c.in;
+      scip_clang::compdb::overrideResourceDir(in, "/r");
+      CHECK_MESSAGE(in == c.want,
+                    fmt::format("overrideResourceDir({}) = {}, want {}",
+                                fmt::join(c.in, " "), fmt::join(in, " "),
+                                fmt::join(c.want, " ")));
+    }
+  }
+  {
+    // --resource-dir and a GCC toolchain: without it, GCC's install dir is
+    // passed as -resource-dir and its include-fixed as -I; with it, neither
+    // is, since they would shadow the override's builtin headers (limits.h
+    // included). The toolchain is inferred from a stand-in gcc that answers
+    // only -print-search-dirs, over an install dir that has include-fixed.
+    namespace fs = std::filesystem;
+    // Bazel's per-test directory: private to this run, so no other run can
+    // own or race on the path.
+    const char *testTmp = std::getenv("TEST_TMPDIR");
+    auto tmp = fs::path(testTmp ? testTmp : fs::temp_directory_path().c_str()) /
+               "scip-clang-gcc-resource-dir";
+    fs::remove_all(tmp);
+    auto install = tmp / "lib" / "gcc" / "13";
+    fs::create_directories(install / "include-fixed");
+    std::ofstream(install / "include-fixed" / "limits.h") << "#pragma once\n";
+    auto gcc = tmp / "gcc";
+    std::ofstream(gcc) << fmt::format(
+        "#!/bin/sh\n"
+        "[ \"$1\" = -print-search-dirs ] && echo 'install: {}' && exit 0\n"
+        "exit 1\n",
+        install.string());
+    fs::permissions(gcc, fs::perms::owner_all);
+    auto info = compdb::ToolchainInfo::infer(AbsolutePath(gcc.string()));
+    REQUIRE(info != nullptr);
+    REQUIRE(info->kind() == compdb::CompilerKind::Gcc);
+    CHECK(info->isWellFormed(/*resourceDirOverridden*/ false));
+
+    std::vector<std::string> own{"gcc", "-c", "x.cc"};
+    info->adjustCommandLine(own, /*resourceDirOverridden*/ false);
+    std::vector<std::string> added{
+        "-resource-dir", install.string(),
+        fmt::format("-I{}/include-fixed", install.string())};
+    REQUIRE(own.size() >= added.size());
+    CHECK_MESSAGE(std::vector<std::string>(own.end() - added.size(),
+                                           own.end()) == added,
+                  fmt::format("without --resource-dir: {}",
+                              fmt::join(own, " ")));
+
+    std::vector<std::string> overridden{"gcc", "-c", "x.cc"};
+    info->adjustCommandLine(overridden, /*resourceDirOverridden*/ true);
+    CHECK_MESSAGE(overridden == std::vector<std::string>(
+                                    own.begin(), own.end() - added.size()),
+                  fmt::format("with --resource-dir: {}",
+                              fmt::join(overridden, " ")));
+    fs::remove_all(tmp);
+  }
   struct HeaderFilterTestCase {
     std::string regex;
     std::vector<std::string> matchTrue;
