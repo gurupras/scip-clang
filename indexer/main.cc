@@ -44,6 +44,14 @@ static scip_clang::CliOptions parseArguments(int argc, char *argv[]) {
     "Path to use for path->package mappings in JSON format.",
     cxxopts::value<std::string>(cliOptions.packageMapPath));
   parser.add_options(defaultGroup)(
+    "package-map-partial",
+    "Accept a package map with no entry for the project: files outside"
+    " every entry, the project's included, keep the names they have without"
+    " a package map. Without this flag such a map is an error. An entry must"
+    " not contain the project root; one inside it takes its files out of the"
+    " project's package and coverage (warned).",
+    cxxopts::value<bool>(cliOptions.packageMapPartial));
+  parser.add_options(defaultGroup)(
     "resource-dir",
     "Absolute path of the Clang resource directory (builtin headers, e.g."
     " <llvm>/lib/clang/<major>) to use for every compilation, in place of the"
@@ -213,6 +221,10 @@ static scip_clang::CliOptions parseArguments(int argc, char *argv[]) {
   if (cliOptions.workerMode == "compdb" && !cliOptions.resourceDir.empty()) {
     spdlog::error("--resource-dir is not supported with --worker-mode=compdb");
     std::exit(EXIT_FAILURE);
+  }
+  if (cliOptions.packageMapPartial && cliOptions.packageMapPath.empty()) {
+    spdlog::warn("--package-map-partial has no effect without "
+                 "--package-map-path");
   }
 
   cliOptions.receiveTimeout =

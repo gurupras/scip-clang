@@ -213,6 +213,7 @@ struct DriverOptions {
   AbsolutePath indexOutputPath;
   AbsolutePath statsFilePath;
   AbsolutePath packageMapPath;
+  bool packageMapPartial;
   std::string resourceDir;
   bool showCompilerDiagnostics;
   bool showProgress;
@@ -234,6 +235,7 @@ struct DriverOptions {
       : workerExecutablePath(),
         projectRootPath(AbsolutePath("/"), RootKind::Project), compdbPath(),
         indexOutputPath(), statsFilePath(), packageMapPath(),
+        packageMapPartial(cliOpts.packageMapPartial),
         resourceDir(cliOpts.resourceDir),
         showCompilerDiagnostics(cliOpts.showCompilerDiagnostics),
         showProgress(cliOpts.showProgress),
@@ -359,6 +361,9 @@ struct DriverOptions {
     if (!this->packageMapPath.asStringRef().empty()) {
       args.push_back(
           fmt::format("--package-map-path={}", packageMapPath.asStringRef()));
+      if (this->packageMapPartial) {
+        args.push_back("--package-map-partial");
+      }
     }
     if (this->noStacktrace) {
       args.push_back("--no-stack-trace");

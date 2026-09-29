@@ -135,13 +135,15 @@ WorkerOptions WorkerOptions::fromCliOptions(const CliOptions &cliOptions) {
                            cliOptions.preprocessorRecordHistoryFilterRegex,
                            cliOptions.preprocessorHistoryLogPath, false, ""},
                        cliOptions.temporaryOutputDir,
-                       cliOptions.workerFault};
+                       cliOptions.workerFault,
+                       cliOptions.packageMapPartial};
 }
 
 Worker::Worker(WorkerOptions &&options)
     : options(std::move(options)),
       packageMap(this->options.projectRootPath, this->options.packageMapPath,
-                 this->options.mode == WorkerMode::Testing),
+                 this->options.mode == WorkerMode::Testing,
+                 this->options.packageMapPartial),
       messageQueues(), compileCommands(), commandIndex(0), recorder(),
       statistics() {
   switch (this->options.mode) {

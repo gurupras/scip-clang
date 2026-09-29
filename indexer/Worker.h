@@ -66,6 +66,7 @@ struct WorkerOptions {
   PreprocessorHistoryRecordingOptions recordingOptions;
   StdPath temporaryOutputDir;
   std::string workerFault;
+  bool packageMapPartial;
 
   // This is a static method instead of a constructor so that the
   // implicit memberwise initializer is synthesized and available
