@@ -242,6 +242,22 @@ FileMetadataMap::getStableFileId(clang::FileID fileId) const {
   return it->second.stableFileId;
 }
 
+std::string FileMetadataMap::stableNameOfPath(AbsolutePathRef absPathRef) const {
+  if (auto optPackageMetadata = this->packageMap.lookup(absPathRef)) {
+    if (auto optStrView =
+            optPackageMetadata->rootPath.makeRelative(absPathRef)) {
+      return std::string(*optStrView);
+    }
+  }
+  if (auto optRelPath = this->buildRootPath.tryMakeRelative(absPathRef)) {
+    return std::string(optRelPath->asStringView());
+  }
+  if (auto optRelPath = this->projectRootPath.tryMakeRelative(absPathRef)) {
+    return std::string(optRelPath->asStringView());
+  }
+  return fmt::format("<unknown>/{}", absPathRef.fileName().value_or(""));
+}
+
 const FileMetadata *
 FileMetadataMap::getFileMetadata(clang::FileID fileId) const {
   auto it = this->map.find({fileId});
