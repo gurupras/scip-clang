@@ -10,6 +10,9 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclTemplate.h"
+#include "clang/AST/PrettyPrinter.h"
+#include "clang/Basic/FileManager.h"
+#include "clang/Basic/LangOptions.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "llvm/Support/raw_ostream.h"
@@ -513,6 +516,48 @@ SymbolFormatter::getEnumSymbol(const clang::EnumDecl &enumDecl) {
   return this->getTagSymbol(enumDecl);
 }
 
+namespace {
+
+/// Prints the file of an anonymous tag's location (e.g. in
+/// "(anonymous struct at <file>:3:15)") as the file's stable path instead of
+/// the path clang opened it under, so that a type string, and the function
+/// disambiguator hashed from it, is the same wherever the tree was compiled.
+class StablePathPrintingCallbacks final : public clang::PrintingCallbacks {
+  const clang::SourceManager &sourceManager;
+  const FileMetadataMap &fileMetadataMap;
+
+public:
+  StablePathPrintingCallbacks(const clang::SourceManager &sourceManager,
+                              const FileMetadataMap &fileMetadataMap)
+      : sourceManager(sourceManager), fileMetadataMap(fileMetadataMap) {}
+
+  std::string remapPath(llvm::StringRef path) const override {
+    // The printed path is the presumed file name, which for a real file is
+    // the name the file manager opened it under, so the lookup is a cache hit.
+    auto optFileRef = this->sourceManager.getFileManager().getOptionalFileRef(
+        path, /*OpenFile*/ false, /*CacheFailure*/ false);
+    if (optFileRef) {
+      auto fileId = this->sourceManager.translateFile(*optFileRef);
+      if (fileId.isValid()) {
+        if (auto optStableFileId =
+                this->fileMetadataMap.getStableFileId(fileId)) {
+          return std::string(optStableFileId->path.asStringView());
+        }
+      }
+    }
+    // A name that is not a known file: an absolute one (a #line name, such as
+    // the absolute grammar path bison and flex write under CMake) is named as
+    // FileMetadataMap names a path, so it carries no host path; a relative
+    // one, and one that is not a path (<built-in>), is printed as written.
+    if (auto optAbsPath = AbsolutePathRef::tryFrom(path)) {
+      return this->fileMetadataMap.stableNameOfPath(*optAbsPath);
+    }
+    return std::string(path);
+  }
+};
+
+} // namespace
+
 std::string_view SymbolFormatter::getFunctionDisambiguator(
     const clang::FunctionDecl &functionDecl, char buf[16]) {
   const clang::FunctionDecl *definingDecl = &functionDecl;
@@ -547,7 +592,14 @@ std::string_view SymbolFormatter::getFunctionDisambiguator(
     }
   }
   // 64-bit hash in hex should take 16 characters at most.
-  auto typeString = definingDecl->getType().getCanonicalType().getAsString();
+  // The policy is the default one QualType::getAsString() uses, plus the
+  // stable-path callbacks, so only an anonymous tag's location changes.
+  clang::PrintingPolicy policy{clang::LangOptions()};
+  StablePathPrintingCallbacks callbacks{this->sourceManager,
+                                        this->fileMetadataMap};
+  policy.Callbacks = &callbacks;
+  auto typeString = clang::QualType::getAsString(
+      definingDecl->getType().getCanonicalType().split(), policy);
   auto *end = fmt::format_to(buf, "{:x}", HashValue::forText(typeString));
   return std::string_view{buf, end};
 }

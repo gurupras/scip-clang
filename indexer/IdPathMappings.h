@@ -111,6 +111,12 @@ public:
   /// See the doc comment on \c FileMetadataMap
   std::optional<StableFileId> getStableFileId(clang::FileID fileId) const;
 
+  /// The stable name of an absolute path that is not a file of the TU (such
+  /// as a #line name), named as \c insert names a path: relative to its
+  /// package root, else to the build root, else to the project root, and
+  /// otherwise the path-free "<unknown>/<basename>".
+  std::string stableNameOfPath(AbsolutePathRef absPathRef) const;
+
   /// The return value may be nullptr if the metadata is missing
   const FileMetadata *getFileMetadata(clang::FileID fileId) const;
 
