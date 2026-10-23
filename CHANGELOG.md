@@ -1,5 +1,17 @@
 # scip-clang ChangeLog
 
+## v0.4.0-alx.1 (beta)
+
+- Indexes declarations and references inside `extern "C"` and
+  `extern "C++"` linkage blocks, which were previously skipped.
+  Cherry-picked from upstream; thanks to Mike Kinney.
+  (https://github.com/sourcegraph/scip-clang/pull/548,
+  https://github.com/sourcegraph/scip-clang/issues/544)
+- An anonymous struct, union or enum inside a linkage block now
+  takes its context from `getRedeclContext()`, so anonymous types
+  in different `extern "C"` headers no longer collide on
+  `$anonymous_type_0#`.
+
 ## v0.4.0 (beta)
 
 - Updated LLVM to version 21.

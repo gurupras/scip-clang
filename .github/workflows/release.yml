@@ -1,147 +1,203 @@
+# Release pipeline for the gurupras/scip-clang fork.
+#
+# Upstream's release workflow runs on Sourcegraph's paid runners and needs
+# Sourcegraph's Google Cloud secrets, so it cannot run here. This version uses
+# GitHub's free runners only:
+#
+#   - push to an alx/** branch  -> build both platforms, no release
+#   - push of a v* tag          -> build both platforms, then publish a GitHub
+#                                  release with the binaries, LICENSE and
+#                                  SHA256SUMS
+#   - workflow_dispatch         -> build the dispatched ref (publishes only if
+#                                  that ref is a v* tag)
+#
+# The binaries are built with --config=release, the same config used for the
+# hand-built v0.4.0-alx.1 binary. The release notes come from the tag's
+# "## v<version>" section of CHANGELOG.md.
 name: Release
 on:
   push:
+    branches:
+      - "alx/**"
     tags:
       - "v*"
   workflow_dispatch:
-    inputs:
-      revision:
-        description: "Tag or revision to build binaries for"
-        type: string
-        required: true
-      create_release:
-        description: "Should publish the binary or not"
-        required: true
-        default: "false"
 
 jobs:
-  build-and-upload-artifacts:
-    name: "Build and upload artifacts"
+  build:
+    name: "Build (${{ matrix.platform }})"
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - platform: "ubuntu-24.04-32core-graph-team-amd64"
-            config: "dev"
-          - platform: "ubuntu-24.04-32core-graph-team-amd64"
-            config: "release"
-          # macOS 14 => arm64
+          # linux x86_64: 4 cores, 16 GB RAM
+          - platform: "ubuntu-24.04"
+            bazel_mem: "4g"
+            bazel_jobs: "4"
+          # darwin arm64: 3 cores, 7 GB RAM
           - platform: "macos-14"
-            config: "release"
+            bazel_mem: "3g"
+            bazel_jobs: "3"
     runs-on: ${{ matrix.platform }}
-    env:
-      TAG: ${{ github.event.ref }}
+    timeout-minutes: 360
     permissions:
-      contents: "read"
-      id-token: "write"
+      contents: read
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v4
-      - name: "📝 Check version"
+
+      - name: "Check version"
+        env:
+          REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          if [[ "${TAG:-}" == v* ]]; then
-            TAG_LIKE="$TAG"
+          if [[ "$REF" == refs/tags/v* ]]; then
+            NEW_VERSION="${REF#refs/tags/v}"
           else
-            TAG_LIKE="$(grep '## v' CHANGELOG.md | head -n 1 | cut -d ' ' -f 2)"
+            NEW_VERSION="$(sed -n 's/^#define VERSION "\(.*\)"$/\1/p' indexer/Version.h)"
           fi
-          NEW_VERSION="${TAG_LIKE/v/}" ./tools/version_check.sh
-      - name: "🐍 Install Bazelisk"
+          if [ -z "$NEW_VERSION" ]; then
+            echo "::error::could not determine the version"
+            exit 1
+          fi
+          echo "Checking version $NEW_VERSION"
+          NEW_VERSION="$NEW_VERSION" ./tools/version_check.sh
+
+      - name: "Free disk space"
+        if: runner.os == 'Linux'
         run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h
+
+      - name: "Install Bazelisk"
+        run: |
+          set -euo pipefail
           if ! command -v bazelisk && ! command -v bazel; then
             if [ "$RUNNER_OS" == "Linux" ]; then
-              sudo curl -L https://github.com/bazelbuild/bazelisk/releases/download/v1.16.0/bazelisk-linux-amd64 -o /usr/local/bin/bazel
+              sudo curl -fsSL https://github.com/bazelbuild/bazelisk/releases/download/v1.25.0/bazelisk-linux-amd64 -o /usr/local/bin/bazel
               sudo chmod +x /usr/local/bin/bazel
             else
-              sudo npm install -g @bazel/bazelisk
+              brew install bazelisk
             fi
           fi
-      - id: auth
-        name: "🔓 Authenticate to Google Cloud"
-        uses: "google-github-actions/auth@v2"
-        with:
-          workload_identity_provider: ${{ secrets.GCP_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          create_credentials_file: true
-      - name: "🚧 Build scip-clang"
+          bazel --version  # .bazelversion pins 7.5.0
+
+      - name: "Build scip-clang"
+        env:
+          BAZEL_MEM: ${{ matrix.bazel_mem }}
+          BAZEL_JOBS: ${{ matrix.bazel_jobs }}
         run: |
-          if [ "$RUNNER_OS" == "macOS" ]; then
-            export BAZEL_MEM="13G"
-          else # if [ "$RUNNER_OS" == "Linux" ]; then
-            export BAZEL_MEM="6G"
-          fi
+          set -euo pipefail
+          # ci.bazelrc is try-imported by .bazelrc and gitignored.
           {
             echo "startup --host_jvm_args=-Xmx$BAZEL_MEM"
+            echo "build --jobs=$BAZEL_JOBS"
+            echo "build --local_ram_resources=HOST_RAM*.5"
           } > ci.bazelrc
-          # Comment out the 'upload log' bit below for debugging
-          SUFFIX=""
-          if [ "$CONFIG" == "release" ]; then
-            if [ "$(uname -s)" == "Linux" ]; then
-              SUFFIX="-linux"
-            fi
-          fi
-          bazel build //indexer:scip-clang --config="$CONFIG$SUFFIX" # --execution_log_binary_file=log
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            echo "--- GLIBC VERSIONS ---"
-            objdump -T bazel-bin/indexer/scip-clang | grep GLIBC | sed 's/.*GLIBC_\([.0-9]*\).*/\1/g' | sort -Vu
-            echo "----------------------"
-          fi
-        env:
-          CONFIG: ${{ matrix.config }}
-      - name: "🔎 Identify OS"
-        run: echo "OS=$(uname -s | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
-      # - name: '🪵 Upload log'
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: ${{ env.OS }}-${{ matrix.config }}-build-log
-      #     path: log
-      - name: ${{ format('🪄 Rename binary ({0})', matrix.config) }}
+          cat ci.bazelrc
+          bazel build //indexer:scip-clang --config=release
+          df -h
+
+      - name: "Package binary"
         run: |
-          SUFFIX="-dev"
-          if [ "$CONFIG" == "release" ]; then
-            SUFFIX=""
+          set -euo pipefail
+          out="scip-clang-$(uname -m)-$(uname -s | tr '[:upper:]' '[:lower:]')"
+          cp bazel-bin/indexer/scip-clang "$out"
+          chmod +x "$out"
+          echo "BINARY=$out" >> "$GITHUB_ENV"
+
+      - name: "Summarize binary"
+        run: |
+          set -euo pipefail
+          if command -v sha256sum >/dev/null; then
+            sha="$(sha256sum "$BINARY" | cut -d ' ' -f 1)"
+          else
+            sha="$(shasum -a 256 "$BINARY" | cut -d ' ' -f 1)"
           fi
-          outBinaryPath="scip-clang${SUFFIX}-$(uname -m)-$OS"
-          cp bazel-bin/indexer/scip-clang "$outBinaryPath"
-          echo "outBinaryPath=$outBinaryPath" >> "$GITHUB_ENV"
-          echo "suffix=$SUFFIX" >> "$GITHUB_ENV"
-        env:
-          OS: ${{ env.OS }}
-          CONFIG: ${{ matrix.config }}
-      - name: ${{ format('📦 Store binary ({0})', matrix.config) }}
+          version="$("./$BINARY" --version | tr '\n' ' ' | sed 's/ *$//')"
+          glibc="n/a"
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            glibc="$(objdump -T "$BINARY" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -Vu | tail -n 1)"
+          fi
+          {
+            echo "### $BINARY"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| sha256 | \`$sha\` |"
+            echo "| --version | $version |"
+            echo "| glibc floor | $glibc |"
+            echo "| size | $(wc -c < "$BINARY" | tr -d ' ') bytes |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=$BINARY::sha256=$sha; version=$version; glibc floor=$glibc"
+
+      - name: "Upload binary"
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-${{ matrix.config }}-release-artifacts
-          path: ${{ env.outBinaryPath }}
+          name: ${{ env.BINARY }}
+          path: ${{ env.BINARY }}
+          if-no-files-found: error
 
-  create-release:
+  release:
     name: "Create release"
-    if: github.event_name != 'workflow_dispatch' || inputs.create_release
-    needs: build-and-upload-artifacts
-    runs-on: "ubuntu-24.04"
+    needs: build
+    # always() so a macOS failure does not block publishing the Linux binary.
+    if: always() && startsWith(github.ref, 'refs/tags/v') && needs.build.result != 'cancelled'
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: "📝 Create Release"
-        run: |
-          REV="$INPUT_REVISION"
-          if [ "$TRIGGER" != "workflow_dispatch" ]; then
-            REV="${GITHUB_REF/refs\/tags\//}"
-          fi
-          TEMPLATE="$(< .github/workflows/release-template.md)"
-          echo "${TEMPLATE//TAG_PLACEHOLDER/$REV}" > notes
-          gh release create "$REV" --title "scip-clang $REV" --notes-file notes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TRIGGER: ${{ github.event_name }}
-          INPUT_REVISION: ${{ inputs.revision }}
-      # Download everything to avoid spelling out the different
-      # platforms here.
-      - name: "📥 Download all artifacts"
+
+      - name: "Download binaries"
         uses: actions/download-artifact@v4
-      - name: "📤 Upload artifacts for release"
-        run: gh release upload "${GITHUB_REF/refs\/tags\//}" ./*-release-artifacts/*
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: "Assemble release files"
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ ! -f dist/scip-clang-x86_64-linux ]; then
+            echo "::error::dist/scip-clang-x86_64-linux is missing; the Linux build did not succeed"
+            exit 1
+          fi
+          if [ ! -f dist/scip-clang-arm64-darwin ]; then
+            echo "::warning::dist/scip-clang-arm64-darwin is missing; releasing without the macOS binary"
+          fi
+          chmod +x dist/scip-clang-*
+          cp LICENSE dist/LICENSE
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          cat dist/SHA256SUMS
+
+          glibc="$(objdump -T dist/scip-clang-x86_64-linux | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -Vu | tail -n 1)"
+          version="${TAG#v}"
+          # The "## v<version>" CHANGELOG section, up to the next "## " heading.
+          awk -v hdr="## v$version" '
+            index($0, hdr) == 1 && (length($0) == length(hdr) || substr($0, length(hdr) + 1, 1) == " ") { on = 1; next }
+            on && /^## / { exit }
+            on { print }
+          ' CHANGELOG.md > notes
+          if ! grep -q '[^[:space:]]' notes; then
+            echo "::error::no '## v$version' section found in CHANGELOG.md"
+            exit 1
+          fi
+          {
+            echo ""
+            echo "---"
+            echo ""
+            echo "Built on GitHub Actions with \`bazel build //indexer:scip-clang --config=release\`."
+            echo "The Apache-2.0 LICENSE is attached; SHA256SUMS covers every file."
+            echo "The linux build requires glibc >= $glibc."
+          } >> notes
+          cat notes
+
+      - name: "Publish release"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --verify-tag --title "scip-clang $TAG" --notes-file notes dist/*

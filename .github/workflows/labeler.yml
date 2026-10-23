@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   triage:
+    if: github.repository == 'sourcegraph/scip-clang'
     runs-on: ubuntu-latest
     steps:
     - uses: github/issue-labeler@v3.4
