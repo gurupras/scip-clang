@@ -1,5 +1,11 @@
 # scip-clang ChangeLog
 
+## v0.4.0-alx.2 (beta)
+
+- No source changes from v0.4.0-alx.1. This is the first release
+  built and published by this fork's GitHub Actions workflow, so the
+  binaries differ in bytes from the hand-built v0.4.0-alx.1 assets.
+
 ## v0.4.0-alx.1 (beta)
 
 - Indexes declarations and references inside `extern "C"` and
