@@ -419,7 +419,7 @@ SymbolFormatter::getTagSymbol(const clang::TagDecl &tagDecl) {
     ENFORCE(defFileId.isValid());
     auto counter = this->anonymousTypeCounters[{defFileId}]++;
 
-    auto declContext = definitionTagDecl->getDeclContext();
+    auto declContext = definitionTagDecl->getDeclContext()->getRedeclContext();
     DescriptorBuilder descriptor{.name = {}, .suffix = scip::Descriptor::Type};
     if (llvm::isa<clang::NamespaceDecl>(declContext)
         || llvm::isa<clang::TranslationUnitDecl>(declContext)) {
