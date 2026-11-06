@@ -208,6 +208,16 @@ public:
 
 class ForwardDecl;
 
+/// Fork-only SymbolRole bit (not in scip.proto): the occurrence defines or
+/// declares a template specialization (explicit or partial, of a class,
+/// variable or function template) or a member of one. scip-clang names a
+/// specialization with its primary template's symbol, so without this bit
+/// `template <> struct Traits<X> {...}` is indistinguishable from the
+/// definition of `Traits` itself. A high bit, so it cannot collide with
+/// roles scip.proto may add; consumers must not store it verbatim as a
+/// SCIP role. See NOTE(ref: specialization-role).
+constexpr int32_t specializationRole = 1 << 24;
+
 class ForwardDeclOccurrence final {
   SymbolNameRef symbol;
   std::array<int32_t, 4> range;

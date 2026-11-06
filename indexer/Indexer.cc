@@ -1416,6 +1416,43 @@ void TuIndexer::saveDeclaration(
                                     scip::SymbolRole::ForwardDefinition, decl);
 }
 
+// NOTE(def: specialization-role)
+// Is \param decl a template specialization, or a member of one? scip-clang
+// gives a specialization the symbol of its primary template (so that
+// navigation from Traits<X> reaches Traits), which makes the definition of
+// a specialization look like a second definition of the template. Consumers
+// choosing "the" definition of a template need to tell them apart.
+static bool isSpecialization(const clang::Decl &decl) {
+  if (llvm::isa<clang::ClassTemplateSpecializationDecl>(decl)
+      || llvm::isa<clang::VarTemplateSpecializationDecl>(decl)) {
+    return true;
+  }
+  if (auto *functionDecl = llvm::dyn_cast<clang::FunctionDecl>(&decl)) {
+    return functionDecl->getTemplateSpecializationKind()
+           == clang::TSK_ExplicitSpecialization;
+  }
+  if (auto *varDecl = llvm::dyn_cast<clang::VarDecl>(&decl)) {
+    return varDecl->getTemplateSpecializationKind()
+           == clang::TSK_ExplicitSpecialization;
+  }
+  if (auto *recordDecl = llvm::dyn_cast<clang::CXXRecordDecl>(&decl)) {
+    if (recordDecl->getTemplateSpecializationKind()
+        == clang::TSK_ExplicitSpecialization) {
+      return true;
+    }
+  }
+  // A member written inside a specialization's body, e.g. `f` in
+  // `template <> struct Traits<X> { static int f(); };`, shares its symbol
+  // with the primary template's member too.
+  for (auto *context = decl.getDeclContext(); context;
+       context = context->getParent()) {
+    if (llvm::isa<clang::ClassTemplateSpecializationDecl>(context)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void TuIndexer::saveDefinitionOrDeclaration(
     SymbolNameRef symbol, clang::SourceLocation loc,
     std::optional<scip::SymbolInformation> &&optSymbolInfo, int32_t allRoles,
@@ -1423,6 +1460,9 @@ void TuIndexer::saveDefinitionOrDeclaration(
   auto [expansionLoc, viaMacroBody] = this->occurrenceLoc(loc);
   if (viaMacroBody) {
     allRoles |= scip::SymbolRole::Generated;
+  }
+  if (decl && isSpecialization(*decl)) {
+    allRoles |= scip::specializationRole;
   }
   auto fileId = this->sourceManager.getFileID(expansionLoc);
   if (!this->fileIdsToBeIndexed.contains({fileId})) {

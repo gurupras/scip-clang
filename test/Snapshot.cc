@@ -260,6 +260,9 @@ void SnapshotPrinter::printDocument(const scip::Document &document,
       if (occ.symbol_roles() & scip::SymbolRole::Generated) {
         symbolRole += "(generated) ";
       }
+      if (occ.symbol_roles() & scip::specializationRole) {
+        symbolRole += "(specialization) ";
+      }
 
       ENFORCE(range.start.column < range.end.column
                   || (range.start.line == 1 && range.end.line == 1
