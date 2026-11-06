@@ -20,6 +20,8 @@ See `docs/changes/CHANGES-0.4.0-fork.3.md` for the reasoning and evidence.
   specializations, and of members written inside them, carry the
   fork-only role bit `1 << 24`. It is not a SCIP role.
 - Documents declare `position_encoding = UTF8CodeUnitOffsetFromLineStart`.
+- Fixes references to symbols from re-included headers (e.g. `size_t`
+  from `<stddef.h>`) being dropped in some runs, depending on ASLR.
 - Snapshot output prints `declaration`, `(generated)` and
   `(specialization)`.
 
