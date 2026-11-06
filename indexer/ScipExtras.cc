@@ -452,6 +452,12 @@ struct IndexWriter {
   }
 
   void writeDocument(scip::Document &&doc, bool deterministic) {
+    // Columns come from clang's presumed locations, which count bytes from
+    // the start of the line, i.e. UTF-8 code units. Say so explicitly:
+    // with UnspecifiedPositionEncoding, a consumer storing UTF-16 columns
+    // (as LSP clients do) has to guess.
+    doc.set_position_encoding(
+        scip::PositionEncoding::UTF8CodeUnitOffsetFromLineStart);
     auto path = std::string_view(doc.relative_path());
     auto it = this->forwardDeclOccurenceMap.find(path);
     if (it != this->forwardDeclOccurenceMap.end()) {
