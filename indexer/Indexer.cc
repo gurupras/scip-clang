@@ -966,21 +966,39 @@ void TuIndexer::saveTypedefNameDecl(
                        std::move(symbolInfo), 0, &typedefNameDecl);
 }
 
+// NOTE(def: using-alias-relationship)
+// `using ns::X;` introduces an alias symbol for X in the current scope, and
+// uses of X that were found through the using point at the alias (see
+// saveDeclRefExpr), so that "which using brought this in" is kept. The
+// alias's SymbolInformation also gets Relationship{X, is_definition}, the
+// SCIP way of saying "go to definition of the alias goes to X's
+// definition", so a consumer can resolve a use in one hop instead of
+// reading the reference that shares the alias's range. is_reference is not
+// set: the using is not a use of X beyond the reference already emitted.
 void TuIndexer::saveUsingShadowDecl(
     const clang::UsingShadowDecl &usingShadowDecl) {
   if (auto optSymbol =
           this->symbolFormatter.getUsingShadowSymbol(usingShadowDecl)) {
+    std::optional<SymbolNameRef> optTargetSymbol;
+    if (auto *namedDecl = usingShadowDecl.getTargetDecl()) {
+      optTargetSymbol = this->symbolFormatter.getNamedDeclSymbol(*namedDecl);
+    }
     if (auto *baseUsingDecl = usingShadowDecl.getIntroducer()) {
       scip::SymbolInformation symbolInfo{};
       this->getDocComment(usingShadowDecl).addTo(symbolInfo);
+      if (optTargetSymbol.has_value()
+          && optTargetSymbol->value != optSymbol->value) {
+        scip::Relationship rel{};
+        auto target = optTargetSymbol->value;
+        rel.set_symbol(target.data(), target.size());
+        rel.set_is_definition(true);
+        *symbolInfo.add_relationships() = std::move(rel);
+      }
       this->saveDefinition(*optSymbol, usingShadowDecl.getLocation(),
                            std::move(symbolInfo), 0, &usingShadowDecl);
     }
-    if (auto *namedDecl = usingShadowDecl.getTargetDecl()) {
-      if (auto optSymbol =
-              this->symbolFormatter.getNamedDeclSymbol(*namedDecl)) {
-        this->saveReference(*optSymbol, usingShadowDecl.getLocation());
-      }
+    if (optTargetSymbol.has_value()) {
+      this->saveReference(*optTargetSymbol, usingShadowDecl.getLocation());
     }
   }
 }
