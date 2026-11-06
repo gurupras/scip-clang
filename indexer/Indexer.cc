@@ -1429,9 +1429,12 @@ void TuIndexer::saveDeclaration(
 // navigation from Traits<X> reaches Traits), which makes the definition of
 // a specialization look like a second definition of the template. Consumers
 // choosing "the" definition of a template need to tell them apart.
-static bool isSpecialization(const clang::Decl &decl) {
-  if (llvm::isa<clang::ClassTemplateSpecializationDecl>(decl)
-      || llvm::isa<clang::VarTemplateSpecializationDecl>(decl)) {
+/// Whether \p decl is a specialization written in the source: partial, or
+/// explicit (`template <>`). Implicit instantiations are excluded; they
+/// are visited at the primary template's own source ranges.
+static bool isWrittenSpecialization(const clang::Decl &decl) {
+  if (llvm::isa<clang::ClassTemplatePartialSpecializationDecl>(decl)
+      || llvm::isa<clang::VarTemplatePartialSpecializationDecl>(decl)) {
     return true;
   }
   clang::TemplateSpecializationKind kind = clang::TSK_Undeclared;
@@ -1442,7 +1445,11 @@ static bool isSpecialization(const clang::Decl &decl) {
   } else if (auto *recordDecl = llvm::dyn_cast<clang::CXXRecordDecl>(&decl)) {
     kind = recordDecl->getTemplateSpecializationKind();
   }
-  if (kind == clang::TSK_ExplicitSpecialization) {
+  return kind == clang::TSK_ExplicitSpecialization;
+}
+
+static bool isSpecialization(const clang::Decl &decl) {
+  if (isWrittenSpecialization(decl)) {
     return true;
   }
   // A member written inside a specialization's body, e.g. `f` in
@@ -1450,7 +1457,8 @@ static bool isSpecialization(const clang::Decl &decl) {
   // with the primary template's member too.
   for (auto *context = decl.getDeclContext(); context;
        context = context->getParent()) {
-    if (llvm::isa<clang::ClassTemplateSpecializationDecl>(context)) {
+    if (llvm::isa<clang::ClassTemplateSpecializationDecl>(context)
+        && isWrittenSpecialization(*llvm::cast<clang::Decl>(context))) {
       return true;
     }
   }
