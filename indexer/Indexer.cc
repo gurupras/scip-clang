@@ -110,6 +110,8 @@ static scip::SymbolInformation::Kind symbolKindOf(const clang::Decl &decl) {
   return K::UnspecifiedKind;
 }
 
+static bool isSpecialization(const clang::Decl &decl);
+
 std::pair<FileLocalSourceRange, clang::FileID>
 FileLocalSourceRange::fromNonEmpty(const clang::SourceManager &sourceManager,
                                    clang::SourceRange inclusiveRange) {
@@ -652,7 +654,8 @@ void TuIndexer::saveFunctionDecl(const clang::FunctionDecl &functionDecl) {
                          std::move(symbolInfo), 0, &functionDecl);
   } else {
     this->saveForwardDeclaration(symbol, functionDecl.getLocation(),
-                                 this->getDocComment(functionDecl));
+                                 this->getDocComment(functionDecl),
+                                 functionDecl);
   }
 }
 
@@ -788,7 +791,7 @@ void TuIndexer::saveTagDecl(const clang::TagDecl &tagDecl) {
 
   if (!tagDecl.isThisDeclarationADefinition()) {
     this->saveForwardDeclaration(symbol, tagDecl.getLocation(),
-                                 this->getDocComment(tagDecl));
+                                 this->getDocComment(tagDecl), tagDecl);
     return;
   }
 
@@ -1279,11 +1282,15 @@ TuIndexer::occurrenceLoc(clang::SourceLocation loc) const {
 
 void TuIndexer::saveForwardDeclaration(SymbolNameRef symbol,
                                        clang::SourceLocation loc,
-                                       DocComment &&docComment) {
+                                       DocComment &&docComment,
+                                       const clang::Decl &decl) {
   auto [fileLoc, viaMacroBody] = this->occurrenceLoc(loc);
   int32_t symbolRoles = scip::SymbolRole::ForwardDefinition;
   if (viaMacroBody) {
     symbolRoles |= scip::SymbolRole::Generated;
+  }
+  if (isSpecialization(decl)) {
+    symbolRoles |= scip::specializationRole;
   }
   auto [range, fileId] = this->getTokenExpansionRange(fileLoc);
   if (!this->fileIdsToBeIndexed.contains({fileId})) {

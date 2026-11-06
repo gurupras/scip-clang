@@ -386,7 +386,7 @@ private:
   ///
   /// Prefer this over \c saveReference or \c saveOccurrence.
   void saveForwardDeclaration(SymbolNameRef symbol, clang::SourceLocation loc,
-                              DocComment &&);
+                              DocComment &&, const clang::Decl &decl);
 
   void saveReference(SymbolNameRef symbol, clang::SourceLocation loc,
                      const clang::Decl *maybeFwdDecl = nullptr,
