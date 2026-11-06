@@ -246,12 +246,19 @@ void SnapshotPrinter::printDocument(const scip::Document &document,
                             & unsigned(scip::SymbolRole::Definition))
                            > 0);
 
+      bool isDeclaration = (unsigned(occ.symbol_roles())
+                            & unsigned(scip::SymbolRole::ForwardDefinition))
+                           > 0;
+
       std::string symbolRole = "";
       if (!isDefinition
           && (occ.symbol_roles() & scip::SymbolRole::WriteAccess)) {
         symbolRole = (occ.symbol_roles() & scip::SymbolRole::ReadAccess)
                          ? "(read+write) "
                          : "(write) ";
+      }
+      if (occ.symbol_roles() & scip::SymbolRole::Generated) {
+        symbolRole += "(generated) ";
       }
 
       ENFORCE(range.start.column < range.end.column
@@ -265,7 +272,10 @@ void SnapshotPrinter::printDocument(const scip::Document &document,
           absl::StrCat("//", std::string(range.start.column - 1, ' '));
       out << lineStart
           << std::string(range.end.column - range.start.column, '^') << ' '
-          << std::string(isDefinition ? "definition" : "reference") << ' '
+          << std::string(isDefinition    ? "definition"
+                         : isDeclaration ? "declaration"
+                                         : "reference")
+          << ' '
           << symbolRole << ::formatSymbol(occ.symbol()) << '\n';
 
       SnapshotPrinter printer{out, lineStart, options};
