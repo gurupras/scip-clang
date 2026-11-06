@@ -270,16 +270,23 @@ class ForwardDeclMap final {
     // It is OK for this to be a vector instead of a set as the header
     // skipping optimization would prevent occurrences for the same
     // header being emitted multiple times.
-    std::vector<std::pair<RootRelativePathRef, FileLocalSourceRange>> ranges;
+    struct Entry {
+      RootRelativePathRef path;
+      FileLocalSourceRange range;
+      int32_t symbolRoles;
+    };
+    std::vector<Entry> ranges;
   };
   absl::flat_hash_map<SymbolNameRef, Value> map;
 
 public:
   ForwardDeclMap() = default;
 
+  /// \param symbolRoles has SymbolRole::ForwardDefinition for a
+  /// declaration of \param symbol, and not for a reference to it.
   void insert(SymbolNameRef symbol, DocComment &&,
               RootRelativePathRef projectFilePath,
-              FileLocalSourceRange occRange);
+              FileLocalSourceRange occRange, int32_t symbolRoles);
 
   void emit(bool deterministic, scip::ForwardDeclIndex &);
 };
@@ -390,6 +397,22 @@ private:
                       std::optional<scip::SymbolInformation> &&symbolInfo,
                       int32_t extraRoles = 0,
                       const clang::Decl *decl = nullptr);
+
+  /// Like \c saveDefinition, for a declaration that is not a definition
+  /// but is recorded with a SymbolInformation, e.g. `extern int x;` or a
+  /// static data member declared in its class. The occurrence gets
+  /// SymbolRole::ForwardDefinition instead of SymbolRole::Definition.
+  /// See NOTE(ref: declaration-role).
+  void saveDeclaration(SymbolNameRef symbol, clang::SourceLocation loc,
+                       std::optional<scip::SymbolInformation> &&symbolInfo,
+                       const clang::Decl *decl);
+
+  /// Shared by \c saveDefinition and \c saveDeclaration;
+  /// \param allRoles has exactly one of Definition and ForwardDefinition.
+  void saveDefinitionOrDeclaration(
+      SymbolNameRef symbol, clang::SourceLocation loc,
+      std::optional<scip::SymbolInformation> &&symbolInfo, int32_t allRoles,
+      const clang::Decl *decl);
 
   /// The extent of \param decl in \param fileId: the expansion range of its
   /// source range, when both ends expand into that file.

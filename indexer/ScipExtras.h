@@ -211,10 +211,12 @@ class ForwardDecl;
 class ForwardDeclOccurrence final {
   SymbolNameRef symbol;
   std::array<int32_t, 4> range;
+  int32_t symbolRoles;
 
 public:
   template <typename MessageT>
-  ForwardDeclOccurrence(SymbolNameRef symbol, MessageT &ref) : symbol(symbol) {
+  ForwardDeclOccurrence(SymbolNameRef symbol, MessageT &ref)
+      : symbol(symbol), symbolRoles(ref.symbol_roles()) {
     ENFORCE(ref.range_size() == 3 || ref.range_size() == 4);
     this->range.fill(-1);
     for (int i = 0; i < ref.range_size(); ++i) {

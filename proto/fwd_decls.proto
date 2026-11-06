@@ -14,5 +14,9 @@ message ForwardDecl {
   message Reference {
     repeated int32 range = 1;
     string relative_path = 2;
+    // The scip::SymbolRole bits of the occurrence. ForwardDefinition marks
+    // a declaration of the symbol (e.g. `void f();`, `struct S;`); without
+    // it the entry is a reference that resolved to a forward-declared decl.
+    int32 symbol_roles = 3;
   }
 }

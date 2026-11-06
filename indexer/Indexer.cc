@@ -419,10 +419,11 @@ bool RefersToForwardDecl::check(const clang::Decl &decl) {
 
 void ForwardDeclMap::insert(SymbolNameRef symbol, DocComment &&docComment,
                             RootRelativePathRef projectFilePath,
-                            FileLocalSourceRange occRange) {
+                            FileLocalSourceRange occRange,
+                            int32_t symbolRoles) {
   auto &entry = this->map[symbol]; // deliberate default initialization
   entry.docComment.replaceIfEmpty(std::move(docComment));
-  entry.ranges.push_back({projectFilePath, occRange});
+  entry.ranges.push_back({projectFilePath, occRange, symbolRoles});
 }
 
 void ForwardDeclMap::emit(bool deterministic, scip::ForwardDeclIndex &index) {
@@ -438,11 +439,12 @@ void ForwardDeclMap::emit(bool deterministic, scip::ForwardDeclIndex &index) {
                 symbol.value);
         fwdDecl.set_suffix(optSuffix->value.data(), optSuffix->value.size());
         value.docComment.addTo(*fwdDecl.mutable_documentation());
-        for (auto [path, range] : value.ranges) {
+        for (auto [path, range, symbolRoles] : value.ranges) {
           scip::ForwardDecl::Reference ref{};
           range.addTo(ref);
           auto p = path.asStringView();
           ref.set_relative_path(p.data(), p.size());
+          ref.set_symbol_roles(symbolRoles);
           *fwdDecl.add_references() = std::move(ref);
         }
         *index.add_forward_decls() = std::move(fwdDecl);
@@ -1014,7 +1016,13 @@ void TuIndexer::saveVarDecl(const clang::VarDecl &varDecl) {
     // Non-static data members are handled by saveFieldDecl
     scip::SymbolInformation symbolInfo{};
     this->getDocComment(varDecl).addTo(symbolInfo);
-    this->saveDefinition(*optSymbol, loc, symbolInfo, 0, &varDecl);
+    if (varDecl.isThisDeclarationADefinition()
+        == clang::VarDecl::DeclarationOnly) {
+      // `extern int x;`, or `static int x;` inside a class.
+      this->saveDeclaration(*optSymbol, loc, symbolInfo, &varDecl);
+    } else {
+      this->saveDefinition(*optSymbol, loc, symbolInfo, 0, &varDecl);
+    }
   }
 #undef GET_SYMBOL
 }
@@ -1232,7 +1240,10 @@ void TuIndexer::saveForwardDeclaration(SymbolNameRef symbol,
                                        clang::SourceLocation loc,
                                        DocComment &&docComment) {
   auto [fileLoc, viaMacroBody] = this->occurrenceLoc(loc);
-  (void)viaMacroBody;
+  int32_t symbolRoles = scip::SymbolRole::ForwardDefinition;
+  if (viaMacroBody) {
+    symbolRoles |= scip::SymbolRole::Generated;
+  }
   auto [range, fileId] = this->getTokenExpansionRange(fileLoc);
   if (!this->fileIdsToBeIndexed.contains({fileId})) {
     return;
@@ -1242,7 +1253,7 @@ void TuIndexer::saveForwardDeclaration(SymbolNameRef symbol,
     return;
   }
   this->forwardDeclarations.insert(symbol, std::move(docComment),
-                                   optStableFileId->path, range);
+                                   optStableFileId->path, range, symbolRoles);
 }
 
 void TuIndexer::saveReference(SymbolNameRef symbol, clang::SourceLocation loc,
@@ -1262,10 +1273,12 @@ void TuIndexer::saveReference(SymbolNameRef symbol, clang::SourceLocation loc,
   }
   ENFORCE((extraRoles & scip::SymbolRole::Definition) == 0,
           "use saveDefinition instead");
+  ENFORCE((extraRoles & scip::SymbolRole::ForwardDefinition) == 0,
+          "use saveForwardDeclaration or saveDeclaration instead");
   if (maybeFwdDecl && RefersToForwardDecl::check(*maybeFwdDecl)) {
     auto [range, _] = this->getTokenExpansionRange(expansionLoc);
     this->forwardDeclarations.insert(symbol, this->getDocComment(*maybeFwdDecl),
-                                     optStableFileId->path, range);
+                                     optStableFileId->path, range, extraRoles);
     return;
   }
   (void)this->saveOccurrence(symbol, expansionLoc, extraRoles);
@@ -1337,9 +1350,38 @@ void TuIndexer::saveDefinition(
     SymbolNameRef symbol, clang::SourceLocation loc,
     std::optional<scip::SymbolInformation> &&optSymbolInfo,
     int32_t extraRoles, const clang::Decl *decl) {
+  ENFORCE((extraRoles & scip::SymbolRole::ForwardDefinition) == 0,
+          "use saveDeclaration instead");
+  this->saveDefinitionOrDeclaration(symbol, loc, std::move(optSymbolInfo),
+                                    extraRoles | scip::SymbolRole::Definition,
+                                    decl);
+}
+
+// NOTE(def: declaration-role)
+// A declaration that is not a definition gets SymbolRole::ForwardDefinition
+// and never SymbolRole::Definition, so that a consumer can find a symbol's
+// definition by its role alone:
+// - `void f();`, `struct S;` and other forward declarations, which upstream
+//   emitted with no role at all, indistinguishable from references (so a
+//   header full of declarations looked like a header full of calls);
+// - `extern int x;` and `static int x;` inside a class, which upstream
+//   emitted as definitions.
+// A reference that resolves to a forward-declared decl keeps its roles.
+void TuIndexer::saveDeclaration(
+    SymbolNameRef symbol, clang::SourceLocation loc,
+    std::optional<scip::SymbolInformation> &&optSymbolInfo,
+    const clang::Decl *decl) {
+  this->saveDefinitionOrDeclaration(symbol, loc, std::move(optSymbolInfo),
+                                    scip::SymbolRole::ForwardDefinition, decl);
+}
+
+void TuIndexer::saveDefinitionOrDeclaration(
+    SymbolNameRef symbol, clang::SourceLocation loc,
+    std::optional<scip::SymbolInformation> &&optSymbolInfo, int32_t allRoles,
+    const clang::Decl *decl) {
   auto [expansionLoc, viaMacroBody] = this->occurrenceLoc(loc);
   if (viaMacroBody) {
-    extraRoles |= scip::SymbolRole::Generated;
+    allRoles |= scip::SymbolRole::Generated;
   }
   auto fileId = this->sourceManager.getFileID(expansionLoc);
   if (!this->fileIdsToBeIndexed.contains({fileId})) {
@@ -1356,9 +1398,8 @@ void TuIndexer::saveDefinition(
     optSymbolInfo->set_kind(symbolKindOf(*decl));
   }
   if (optStableFileId->isInProject) {
-    auto &doc = this->saveOccurrence(symbol, expansionLoc,
-                                     extraRoles | scip::SymbolRole::Definition);
-    if (decl) {
+    auto &doc = this->saveOccurrence(symbol, expansionLoc, allRoles);
+    if (decl && (allRoles & scip::SymbolRole::Definition)) {
       if (auto encl = this->enclosingRange(*decl, fileId)) {
         auto &occ = doc.occurrences.back().occ;
         occ.add_enclosing_range(encl->startLine - 1);

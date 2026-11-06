@@ -249,6 +249,7 @@ RootRelativePath::RootRelativePath(std::string &&value)
 void ForwardDeclOccurrence::addTo(scip::Occurrence &occ) {
   auto sym = this->symbol.value;
   occ.set_symbol(sym.data(), sym.size());
+  occ.set_symbol_roles(this->symbolRoles);
   for (size_t i = 0; i < 4 && this->range[i] != -1; ++i) {
     occ.add_range(this->range[i]);
   }
