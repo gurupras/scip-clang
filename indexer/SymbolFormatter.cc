@@ -10,6 +10,7 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclTemplate.h"
+#include "clang/Basic/CharInfo.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "llvm/Support/raw_ostream.h"
@@ -172,17 +173,51 @@ SymbolNameRef SymbolFormatter::getMacroSymbol(clang::SourceLocation defLoc) {
     filepath = std::string_view(defPLoc.getFilename());
   }
 
-  // Technically, ':' is used by SCIP for <meta>, but using ':'
-  // here lines up with other situations like compiler errors.
-  auto name = this->formatTemporaryName("{}:{}:{}", filepath, defPLoc.getLine(),
-                                        defPLoc.getColumn());
+  // NOTE(def: macro-symbol)
+  // A macro's symbol is its name inside the file that defines it,
+  // `<file>/path/to/defs.h`/NAME!, nested under that file's symbol.
+  // Upstream used `path/to/defs.h:LINE:COL`!, so adding a line above a
+  // #define renamed the macro, and every reference to it in every other
+  // file changed, even though nothing about the macro did. Two #defines of
+  // one name in one file (#undef and #define again, or #if branches) now
+  // share a symbol, which is what a reader means by "the macro NAME from
+  // defs.h"; the same name in two files stays two symbols.
+  auto fileDescriptor = fmt::format("<file>/{}", filepath);
+  const char *nameStart = this->sourceManager.getCharacterData(defLoc);
+  const char *nameEnd = nameStart;
+  while (clang::isAsciiIdentifierContinue(*nameEnd, /*AllowDollar*/ true)) {
+    ++nameEnd;
+  }
+  ENFORCE(nameEnd != nameStart, "no macro name at {}",
+          debug::formatLoc(this->sourceManager, defLoc));
   auto symbol = this->format(SymbolBuilder{
       packageId,
-      {DescriptorBuilder{.name = name, .suffix = scip::Descriptor::Macro}}});
+      {DescriptorBuilder{.name = fileDescriptor,
+                         .suffix = scip::Descriptor::Namespace},
+       DescriptorBuilder{
+           .name = std::string_view(nameStart, size_t(nameEnd - nameStart)),
+           .suffix = scip::Descriptor::Macro}}});
 
   auto [newIt, inserted] = this->locationBasedCache.insert({{defLoc}, symbol});
   ENFORCE(inserted, "key was missing earlier, so insert should've succeeded");
   return newIt->second;
+}
+
+bool SymbolFormatter::isMacroDefinedOutsideProject(
+    clang::SourceLocation defLoc) {
+  auto defPLoc =
+      this->sourceManager.getPresumedLoc(defLoc, /*UseLineDirectives*/ false);
+  if (!defPLoc.isValid()) {
+    return false;
+  }
+  auto *fileMetadata =
+      this->fileMetadataMap.getFileMetadata(defPLoc.getFileID());
+  return fileMetadata && !fileMetadata->stableFileId.isInProject;
+}
+
+bool SymbolFormatter::isInProject(clang::FileID fileId) {
+  auto *fileMetadata = this->fileMetadataMap.getFileMetadata(fileId);
+  return fileMetadata && fileMetadata->stableFileId.isInProject;
 }
 
 SymbolNameRef SymbolFormatter::getFileSymbol(const FileMetadata &fileMetadata) {

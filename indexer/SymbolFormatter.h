@@ -119,6 +119,13 @@ public:
 
   SymbolNameRef getMacroSymbol(clang::SourceLocation defLoc);
 
+  /// Is \param defLoc, a macro's definition location, in a file that is not
+  /// part of the project (e.g. a system or third-party header)?
+  bool isMacroDefinedOutsideProject(clang::SourceLocation defLoc);
+
+  /// Is \param fileId a file of the project?
+  bool isInProject(clang::FileID fileId);
+
   SymbolNameRef getFileSymbol(const FileMetadata &);
 
 #define DECLARE_GET_SYMBOL(DeclName)                  \

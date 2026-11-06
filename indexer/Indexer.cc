@@ -272,6 +272,11 @@ void MacroIndexer::saveReference(
   }
   this->saveOccurrence(refFileId, macroNameToken, defMacroInfo,
                        Role::Reference);
+  if (this->sourceManager->getFileID(defMacroInfo->getDefinitionLoc())
+          .isValid()) {
+    this->referencedFileBasedMacros.insert(
+        {NonFileBasedMacro{defMacroInfo}, {refFileId}});
+  }
 }
 void MacroIndexer::saveInclude(clang::FileID containingFileId,
                                clang::SourceRange pathRange,
@@ -350,8 +355,26 @@ void MacroIndexer::emitExternalSymbols(bool deterministic,
             scip::SymbolInformation symbolInfo;
             nonFileBasedMacro.emitSymbolInformation(symbolFormatter,
                                                     symbolInfo);
+            symbolInfo.set_kind(scip::SymbolInformation::Macro);
             *index.add_external_symbols() = std::move(symbolInfo);
           }));
+  absl::flat_hash_set<NonFileBasedMacro> externalFileBasedMacros;
+  for (auto &[macro, refFileId] : this->referencedFileBasedMacros) {
+    if (symbolFormatter.isInProject(refFileId.data)
+        && symbolFormatter.isMacroDefinedOutsideProject(
+            macro.defInfo->getDefinitionLoc())) {
+      externalFileBasedMacros.insert(macro);
+    }
+  }
+  this->referencedFileBasedMacros.clear();
+  scip_clang::extractTransform(
+      std::move(externalFileBasedMacros), deterministic,
+      absl::FunctionRef<void(NonFileBasedMacro &&)>([&](auto &&macro) -> void {
+        scip::SymbolInformation symbolInfo;
+        macro.emitSymbolInformation(symbolFormatter, symbolInfo);
+        symbolInfo.set_kind(scip::SymbolInformation::Macro);
+        *index.add_external_symbols() = std::move(symbolInfo);
+      }));
 }
 
 void MacroIndexer::forEachIncludeInFile(

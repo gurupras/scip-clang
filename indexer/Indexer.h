@@ -168,6 +168,14 @@ class MacroIndexer final {
 
   absl::flat_hash_set<NonFileBasedMacro> nonFileBasedMacros;
 
+  /// (macro defined in a file, file referencing it) pairs seen in this TU.
+  /// A macro defined outside the project and referenced from a project file
+  /// is emitted as an external symbol, the way non-file-based macros are,
+  /// since no Document defines it.
+  absl::flat_hash_set<std::pair<NonFileBasedMacro,
+                                llvm_ext::AbslHashAdapter<clang::FileID>>>
+      referencedFileBasedMacros;
+
   using PerFileIncludeInfo =
       std::vector<std::pair<clang::SourceRange, AbsolutePathRef>>;
 
@@ -186,7 +194,8 @@ class MacroIndexer final {
 
 public:
   MacroIndexer(clang::SourceManager &m)
-      : sourceManager(&m), table(), nonFileBasedMacros(), includeRanges() {}
+      : sourceManager(&m), table(), nonFileBasedMacros(),
+        referencedFileBasedMacros(), includeRanges() {}
   MacroIndexer(MacroIndexer &&) = default;
   MacroIndexer &operator=(MacroIndexer &&other) = default;
   MacroIndexer(const MacroIndexer &) = delete;
