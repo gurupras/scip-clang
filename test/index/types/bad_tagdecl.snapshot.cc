@@ -17,12 +17,12 @@
 //       ^^^^^^^^^ definition [..] enable_if#
    
   template<class T>
-//               ^ definition local 2
+//               ^ definition (specialization) local 2
   struct enable_if<true, T> { typedef T type; };
-//       ^^^^^^^^^ definition [..] enable_if#
+//       ^^^^^^^^^ definition (specialization) [..] enable_if#
 //                       ^ reference local 2
 //                                    ^ reference local 2
-//                                      ^^^^ definition [..] enable_if#type#
+//                                      ^^^^ definition (specialization) [..] enable_if#type#
   
   template< bool B, class T = void >
 //               ^ definition local 3
@@ -40,6 +40,6 @@
 //                ^ definition local 7
   struct ShouldEnable { static bool const value = false; };
 //       ^^^^^^^^^^^^ definition [..] ShouldEnable#
-//                                        ^^^^^ definition [..] ShouldEnable#value.
+//                                        ^^^^^ declaration [..] ShouldEnable#value.
   
   struct MyTemplate<Undeclared, enable_if_t<ShouldEnable<int8_t>::value>> { };

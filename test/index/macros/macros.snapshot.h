@@ -1,15 +1,15 @@
   #define MY_MACRO 0
 //^ definition [..] `<file>/macros.h`/
-//        ^^^^^^^^ definition [..] `macros.h:1:9`!
+//        ^^^^^^^^ definition [..] `<file>/macros.h`/MY_MACRO!
   
   #ifdef MY_MACRO
-//       ^^^^^^^^ reference [..] `macros.h:1:9`!
+//       ^^^^^^^^ reference [..] `<file>/macros.h`/MY_MACRO!
   #endif
   
   #ifndef MY_MACRO
-//        ^^^^^^^^ reference [..] `macros.h:1:9`!
+//        ^^^^^^^^ reference [..] `<file>/macros.h`/MY_MACRO!
   #endif
   
   #define MY_MACRO_ALIAS MY_MACRO
-//        ^^^^^^^^^^^^^^ definition [..] `macros.h:9:9`!
-//                       ^^^^^^^^ reference [..] `macros.h:1:9`!
+//        ^^^^^^^^^^^^^^ definition [..] `<file>/macros.h`/MY_MACRO_ALIAS!
+//                       ^^^^^^^^ reference [..] `<file>/macros.h`/MY_MACRO!

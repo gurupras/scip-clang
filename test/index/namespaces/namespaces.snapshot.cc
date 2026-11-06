@@ -50,27 +50,27 @@
 //             ^ reference [..] c/C#
   
   #define EXPAND_TO_NAMESPACE \
-//        ^^^^^^^^^^^^^^^^^^^ definition [..] `namespaces.cc:36:9`!
+//        ^^^^^^^^^^^^^^^^^^^ definition [..] `<file>/namespaces.cc`/EXPAND_TO_NAMESPACE!
     namespace from_macro {}
   
   EXPAND_TO_NAMESPACE
-//^^^^^^^^^^^^^^^^^^^ definition [..] from_macro/
-//^^^^^^^^^^^^^^^^^^^ reference [..] `namespaces.cc:36:9`!
+//^^^^^^^^^^^^^^^^^^^ definition (generated) [..] from_macro/
+//^^^^^^^^^^^^^^^^^^^ reference [..] `<file>/namespaces.cc`/EXPAND_TO_NAMESPACE!
   
   #define EXPAND_TO_NAMESPACE_2 EXPAND_TO_NAMESPACE
-//        ^^^^^^^^^^^^^^^^^^^^^ definition [..] `namespaces.cc:41:9`!
-//                              ^^^^^^^^^^^^^^^^^^^ reference [..] `namespaces.cc:36:9`!
+//        ^^^^^^^^^^^^^^^^^^^^^ definition [..] `<file>/namespaces.cc`/EXPAND_TO_NAMESPACE_2!
+//                              ^^^^^^^^^^^^^^^^^^^ reference [..] `<file>/namespaces.cc`/EXPAND_TO_NAMESPACE!
   
   EXPAND_TO_NAMESPACE_2
-//^^^^^^^^^^^^^^^^^^^^^ definition [..] from_macro/
-//^^^^^^^^^^^^^^^^^^^^^ reference [..] `namespaces.cc:41:9`!
+//^^^^^^^^^^^^^^^^^^^^^ definition (generated) [..] from_macro/
+//^^^^^^^^^^^^^^^^^^^^^ reference [..] `<file>/namespaces.cc`/EXPAND_TO_NAMESPACE_2!
   
   #define IDENTITY(x) x
-//        ^^^^^^^^ definition [..] `namespaces.cc:45:9`!
+//        ^^^^^^^^ definition [..] `<file>/namespaces.cc`/IDENTITY!
   
   IDENTITY(namespace in_macro { })
-//^^^^^^^^ definition [..] in_macro/
-//^^^^^^^^ reference [..] `namespaces.cc:45:9`!
+//^^^^^^^^ reference [..] `<file>/namespaces.cc`/IDENTITY!
+//                   ^^^^^^^^ definition [..] in_macro/
   
   namespace a {
 //          ^ definition [..] a/

@@ -11,7 +11,7 @@
   }
   
   int f(int x_, int y_);
-//    ^ reference [..] f(9b79fb6aee4c0440).
+//    ^ declaration [..] f(9b79fb6aee4c0440).
 //          ^^ definition local 0
 //                  ^^ definition local 1
   
@@ -45,7 +45,7 @@
     int x;
 //      ^ definition [..] S#x.
     static int y;
-//             ^ definition [..] S#y.
+//             ^ declaration [..] S#y.
   };
   
   int f(S s) {

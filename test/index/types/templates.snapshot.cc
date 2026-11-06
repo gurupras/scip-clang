@@ -55,12 +55,12 @@
   };
   
   template <typename T>
-//                   ^ definition local 12
+//                   ^ definition (specialization) local 12
   struct PointerType<T &> {
-//       ^^^^^^^^^^^ definition [..] PointerType#
+//       ^^^^^^^^^^^ definition (specialization) [..] PointerType#
 //                   ^ reference local 12
     using type = T *;
-//        ^^^^ definition [..] PointerType#type#
+//        ^^^^ definition (specialization) [..] PointerType#type#
 //               ^ reference local 12
   };
   
@@ -90,7 +90,7 @@
   
   template <>
   void specialized<int, int>(int) {}
-//     ^^^^^^^^^^^ definition [..] specialized(d4f767463ce0a6b3).
+//     ^^^^^^^^^^^ definition (specialization) [..] specialized(d4f767463ce0a6b3).
   
   template <typename T>
 //                   ^ definition local 17

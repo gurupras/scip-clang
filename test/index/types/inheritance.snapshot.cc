@@ -41,7 +41,7 @@
   template <>
   struct SpecializedBase<int> {};
 //       ^^^^^^^^^^^^^^^ reference [..] SpecializedBase#
-//       ^^^^^^^^^^^^^^^ definition [..] SpecializedBase#
+//       ^^^^^^^^^^^^^^^ definition (specialization) [..] SpecializedBase#
   
   template <typename T>
 //                   ^ definition local 3
@@ -92,12 +92,12 @@
   
   template <bool, class T> struct BaseWithOnlySpecializations;
 //                      ^ definition local 8
-//                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^ reference [..] BaseWithOnlySpecializations#
+//                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^ declaration [..] BaseWithOnlySpecializations#
   
   template <class T>
-//                ^ definition local 9
+//                ^ definition (specialization) local 9
   struct BaseWithOnlySpecializations<false, T> {};
-//       ^^^^^^^^^^^^^^^^^^^^^^^^^^^ definition [..] BaseWithOnlySpecializations#
+//       ^^^^^^^^^^^^^^^^^^^^^^^^^^^ definition (specialization) [..] BaseWithOnlySpecializations#
 //                                          ^ reference local 9
   
   template <class T>
@@ -118,7 +118,7 @@
   template <>
   struct DerivedFromSelf<int *> {};
 //       ^^^^^^^^^^^^^^^ reference [..] DerivedFromSelf#
-//       ^^^^^^^^^^^^^^^ definition [..] DerivedFromSelf#
+//       ^^^^^^^^^^^^^^^ definition (specialization) [..] DerivedFromSelf#
   
   void useDerivedFromSelf() {
 //     ^^^^^^^^^^^^^^^^^^ definition [..] useDerivedFromSelf(49f6e7a06ebc5aa8).

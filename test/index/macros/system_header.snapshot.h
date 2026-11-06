@@ -2,8 +2,8 @@
 //^ definition [..] `<file>/system_header.h`/
   
   #define SYSTEM_INT 0
-//        ^^^^^^^^^^ definition [..] `system_header.h:3:9`!
+//        ^^^^^^^^^^ definition [..] `<file>/system_header.h`/SYSTEM_INT!
   
   #define OTHER_SYSTEM_INT (SYSTEM_INT + 1)
-//        ^^^^^^^^^^^^^^^^ definition [..] `system_header.h:5:9`!
-//                          ^^^^^^^^^^ reference [..] `system_header.h:3:9`!
+//        ^^^^^^^^^^^^^^^^ definition [..] `<file>/system_header.h`/OTHER_SYSTEM_INT!
+//                          ^^^^^^^^^^ reference [..] `<file>/system_header.h`/SYSTEM_INT!

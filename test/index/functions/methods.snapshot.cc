@@ -79,18 +79,18 @@
   struct A0 {
 //       ^^ definition [..] A0#
     void f();
-//       ^ reference [..] A0#f(49f6e7a06ebc5aa8).
+//       ^ declaration [..] A0#f(49f6e7a06ebc5aa8).
     static void g();
-//              ^ reference [..] A0#g(49f6e7a06ebc5aa8).
+//              ^ declaration [..] A0#g(49f6e7a06ebc5aa8).
     struct B0 {
 //         ^^ definition [..] A0#B0#
       void f();
-//         ^ reference [..] A0#B0#f(49f6e7a06ebc5aa8).
+//         ^ declaration [..] A0#B0#f(49f6e7a06ebc5aa8).
       static void g();
-//                ^ reference [..] A0#B0#g(49f6e7a06ebc5aa8).
+//                ^ declaration [..] A0#B0#g(49f6e7a06ebc5aa8).
     };
     friend bool operator==(const A0 &, const A0 &);
-//              ^^^^^^^^ reference [..] `operator==`(354ee8b82d643f9c).
+//              ^^^^^^^^ declaration [..] `operator==`(354ee8b82d643f9c).
 //                               ^^ reference [..] A0#
 //                                           ^^ reference [..] A0#
   };
@@ -121,7 +121,7 @@
   struct Z0 {
 //       ^^ definition [..] Z0#
     static void f();
-//              ^ reference [..] Z0#f(49f6e7a06ebc5aa8).
+//              ^ declaration [..] Z0#f(49f6e7a06ebc5aa8).
     void g() { f(); }
 //       ^ definition [..] Z0#g(49f6e7a06ebc5aa8).
 //             ^ reference [..] Z0#f(49f6e7a06ebc5aa8).
@@ -189,7 +189,9 @@
 //              ^ reference [..] u/Z0#f(3e454b8ccf442868).
 //              ^ reference [..] u/Z0#f(d4f767463ce0a6b3).
 //              ^ definition [..] u/Z1#f(3e454b8ccf442868).
+//              relation definition [..] u/Z0#f(3e454b8ccf442868).
 //              ^ definition [..] u/Z1#f(d4f767463ce0a6b3).
+//              relation definition [..] u/Z0#f(d4f767463ce0a6b3).
     };
   
     void use_made_public(Z1 z1) {

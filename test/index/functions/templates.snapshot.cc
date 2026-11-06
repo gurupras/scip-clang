@@ -145,12 +145,12 @@
   template <typename T>
 //                   ^ definition local 14
   struct FwdDecl1;
-//       ^^^^^^^^ reference [..] FwdDecl1#
+//       ^^^^^^^^ declaration [..] FwdDecl1#
   
   template <typename T>
 //                   ^ definition local 15
   struct FwdDecl2;
-//       ^^^^^^^^ reference [..] FwdDecl2#
+//       ^^^^^^^^ declaration [..] FwdDecl2#
   
   template <typename X>
 //                   ^ definition local 16

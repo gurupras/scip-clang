@@ -4,5 +4,5 @@
   
   const int total = SYSTEM_INT + OTHER_SYSTEM_INT;
 //          ^^^^^ definition [..] total.
-//                  ^^^^^^^^^^ reference [..] `system_header.h:3:9`!
-//                               ^^^^^^^^^^^^^^^^ reference [..] `system_header.h:5:9`!
+//                  ^^^^^^^^^^ reference [..] `<file>/system_header.h`/SYSTEM_INT!
+//                               ^^^^^^^^^^^^^^^^ reference [..] `<file>/system_header.h`/OTHER_SYSTEM_INT!

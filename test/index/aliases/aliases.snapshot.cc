@@ -15,9 +15,11 @@
 //        ^ reference [..] a/
 //           ^ reference [..] a/S#
 //           ^ definition [..] b/S#
+//           relation definition [..] a/S#
 //              ^ reference [..] a/
 //                 ^ reference [..] a/T#
 //                 ^ definition [..] b/T#
+//                 relation definition [..] a/T#
   }
   
   namespace c {
@@ -45,10 +47,12 @@
 //        ^ reference [..] d/
 //           ^ reference [..] d/S#
 //           ^ definition [..] e/S#
+//           relation definition [..] d/S#
     using T = e::S;
 //        ^ definition [..] e/T#
 //            ^ reference [..] e/
 //               ^ reference [..] e/S#
+//               relation definition [..] d/S#
   
     template <typename X>
 //                     ^ definition local 0
@@ -59,6 +63,7 @@
 //       ^ definition [..] e/f(6824106dca99b347).
 //         ^ reference [..] e/R#
 //           ^ reference [..] e/S#
+//           relation definition [..] d/S#
   }
   
   typedef a::S aS;
@@ -144,6 +149,7 @@
 //          ^ reference [..] z/U#
 //             ^^^^^^^^ reference [..] z/U#identity(ada6a8422704cf8a).
 //             ^^^^^^^^ definition [..] z/V#identity(ada6a8422704cf8a).
+//             relation definition [..] z/U#identity(ada6a8422704cf8a).
     };
   
     template <typename T>
@@ -162,6 +168,7 @@
 //                             ^ reference [..] z/W#v.
 //                               ^^^^^^^^ reference [..] z/V#identity(9b79fb6aee4c0440).
 //                               ^^^^^^^^ reference [..] z/V#identity(ada6a8422704cf8a).
+//                               relation definition [..] z/U#identity(ada6a8422704cf8a).
 //                                        ^ reference local 5
 //                                           ^ reference local 6
     };
@@ -190,18 +197,22 @@
     using j::f;
 //        ^ reference [..] i/j/
 //           ^ definition [..] i/f(49f6e7a06ebc5aa8).
+//           relation definition [..] i/j/f(49f6e7a06ebc5aa8).
 //           ^ reference [..] i/j/f(49f6e7a06ebc5aa8).
     void g() { f(); }
 //       ^ definition [..] i/g(49f6e7a06ebc5aa8).
 //             ^ reference [..] i/f(49f6e7a06ebc5aa8).
+//             relation definition [..] i/j/f(49f6e7a06ebc5aa8).
   
     using j::ft;
 //        ^ reference [..] i/j/
 //           ^^ definition [..] i/ft(9b289cee16747614).
+//           relation definition [..] i/j/ft(9b289cee16747614).
 //           ^^ reference [..] i/j/ft(9b289cee16747614).
     void gt() { ft<int>(0); }
 //       ^^ definition [..] i/gt(49f6e7a06ebc5aa8).
 //              ^^ reference [..] i/ft(9b289cee16747614).
+//              relation definition [..] i/j/ft(9b289cee16747614).
   
     namespace k {
 //            ^ definition [..] i/k/
@@ -221,24 +232,30 @@
     using k::S;
 //        ^ reference [..] i/k/
 //           ^ definition [..] i/S#
+//           relation definition [..] i/k/S#
 //           ^ reference [..] i/k/S#
     using SS = S<int>;
 //        ^^ definition [..] i/SS#
 //             ^ reference [..] i/S#
+//             relation definition [..] i/k/S#
   
     using j::zero;
 //        ^ reference [..] i/j/
 //           ^^^^ definition [..] i/zero.
+//           relation definition [..] i/j/zero.
 //           ^^^^ reference [..] i/j/zero.
     static int zero_int = zero<int>;
 //             ^^^^^^^^ definition [..] i/zero_int.
 //                        ^^^^ reference [..] i/zero.
+//                        relation definition [..] i/j/zero.
   
     using k::SAlias;
 //        ^ reference [..] i/k/
 //           ^^^^^^ definition [..] i/SAlias#
+//           relation definition [..] i/k/SAlias#
 //           ^^^^^^ reference [..] i/k/SAlias#
     using SAliasInt = SAlias<int>;
 //        ^^^^^^^^^ definition [..] i/SAliasInt#
 //                    ^^^^^^ reference [..] i/SAlias#
+//                    relation definition [..] i/k/SAlias#
   }

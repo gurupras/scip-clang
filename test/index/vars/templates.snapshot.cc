@@ -18,23 +18,23 @@
 //    ^^^^^^^^^^ definition [..] C#from_param.
   
     static int static_mono;
-//             ^^^^^^^^^^^ definition [..] C#static_mono.
+//             ^^^^^^^^^^^ declaration [..] C#static_mono.
     static const int static_const_mono = 0;
-//                   ^^^^^^^^^^^^^^^^^ definition [..] C#static_const_mono.
+//                   ^^^^^^^^^^^^^^^^^ declaration [..] C#static_const_mono.
   
     static T static_from_param;
 //         ^ reference local 1
-//           ^^^^^^^^^^^^^^^^^ definition [..] C#static_from_param.
+//           ^^^^^^^^^^^^^^^^^ declaration [..] C#static_from_param.
     static const T static_const_from_param = T();
 //               ^ reference local 1
-//                 ^^^^^^^^^^^^^^^^^^^^^^^ definition [..] C#static_const_from_param.
+//                 ^^^^^^^^^^^^^^^^^^^^^^^ declaration [..] C#static_const_from_param.
 //                                           ^ reference local 1
   
     template <typename U>
 //                     ^ definition local 2
     static const U static_templated = 0;
 //               ^ reference local 2
-//                 ^^^^^^^^^^^^^^^^ definition [..] C#static_templated.
+//                 ^^^^^^^^^^^^^^^^ declaration [..] C#static_templated.
   };
   
   template <typename T>

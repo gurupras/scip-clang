@@ -5,11 +5,11 @@
   
   /// Doc comment on forward decl
   class F;
-//      ^ reference [..] F#
+//      ^ declaration [..] F#
   
   /// From forward decl
   class UndocumentedClass;
-//      ^^^^^^^^^^^^^^^^^ reference [..] UndocumentedClass#
+//      ^^^^^^^^^^^^^^^^^ declaration [..] UndocumentedClass#
   
   void f(F *) {}
 //     ^ definition [..] f(84962a9dbd25570f).

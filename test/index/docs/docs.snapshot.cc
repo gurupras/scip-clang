@@ -46,7 +46,7 @@
   
   /// Ominous sounds
   struct Ghost;
-//       ^^^^^ reference [..] Ghost#
+//       ^^^^^ declaration [..] Ghost#
   
   /// Boo!
   typedef struct Ghost {} Ghost;

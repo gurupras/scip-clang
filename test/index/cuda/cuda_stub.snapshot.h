@@ -10,19 +10,19 @@
   
   #ifndef __NVCC__
   #define __constant__ __attribute__((constant))
-//        ^^^^^^^^^^^^ definition [..] `cuda_stub.h:10:9`!
+//        ^^^^^^^^^^^^ definition [..] `<file>/cuda_stub.h`/__constant__!
   #define __device__ __attribute__((device))
-//        ^^^^^^^^^^ definition [..] `cuda_stub.h:11:9`!
+//        ^^^^^^^^^^ definition [..] `<file>/cuda_stub.h`/__device__!
   #define __global__ __attribute__((global))
-//        ^^^^^^^^^^ definition [..] `cuda_stub.h:12:9`!
+//        ^^^^^^^^^^ definition [..] `<file>/cuda_stub.h`/__global__!
   #define __host__ __attribute__((host))
-//        ^^^^^^^^ definition [..] `cuda_stub.h:13:9`!
+//        ^^^^^^^^ definition [..] `<file>/cuda_stub.h`/__host__!
   #define __shared__ __attribute__((shared))
-//        ^^^^^^^^^^ definition [..] `cuda_stub.h:14:9`!
+//        ^^^^^^^^^^ definition [..] `<file>/cuda_stub.h`/__shared__!
   #define __managed__ __attribute__((managed))
-//        ^^^^^^^^^^^ definition [..] `cuda_stub.h:15:9`!
+//        ^^^^^^^^^^^ definition [..] `<file>/cuda_stub.h`/__managed__!
   #define __launch_bounds__(...) __attribute__((launch_bounds(__VA_ARGS__)))
-//        ^^^^^^^^^^^^^^^^^ definition [..] `cuda_stub.h:16:9`!
+//        ^^^^^^^^^^^^^^^^^ definition [..] `<file>/cuda_stub.h`/__launch_bounds__!
   
   struct dim3 {
 //       ^^^^ definition [..] dim3#
@@ -31,8 +31,8 @@
 //              ^ definition [..] dim3#y.
 //                 ^ definition [..] dim3#z.
     __host__ __device__ dim3(unsigned x, unsigned y = 1, unsigned z = 1) : x(x), y(y), z(z) {}
-//  ^^^^^^^^ reference [..] `cuda_stub.h:13:9`!
-//           ^^^^^^^^^^ reference [..] `cuda_stub.h:11:9`!
+//  ^^^^^^^^ reference [..] `<file>/cuda_stub.h`/__host__!
+//           ^^^^^^^^^^ reference [..] `<file>/cuda_stub.h`/__device__!
 //                      ^^^^ definition [..] dim3#dim3(6df00707c193238d).
 //                                    ^ definition local 0
 //                                                ^ definition local 1
@@ -60,14 +60,14 @@
   #else
   typedef struct cudaStream *cudaStream_t;
 //               ^^^^^^^^^^ reference [..] cudaStream#
-//               ^^^^^^^^^^ reference [..] cudaStream#
+//               ^^^^^^^^^^ declaration [..] cudaStream#
 //                           ^^^^^^^^^^^^ definition [..] cudaStream_t#
   typedef enum cudaError {} cudaError_t;
 //             ^^^^^^^^^ definition [..] cudaError#
 //                          ^^^^^^^^^^^ definition [..] cudaError_t#
   
   extern "C" int cudaConfigureCall(dim3 gridSize, dim3 blockSize,
-//               ^^^^^^^^^^^^^^^^^ reference [..] cudaConfigureCall(c850c79d62248396).
+//               ^^^^^^^^^^^^^^^^^ declaration [..] cudaConfigureCall(c850c79d62248396).
 //                                 ^^^^ reference [..] dim3#
 //                                      ^^^^^^^^ definition local 3
 //                                                ^^^^ reference [..] dim3#
@@ -79,7 +79,7 @@
 //                                 ^^^^^^^^^^^^ reference [..] cudaStream_t#
 //                                              ^^^^^^ definition local 6
   extern "C" int __cudaPushCallConfiguration(dim3 gridSize, dim3 blockSize,
-//               ^^^^^^^^^^^^^^^^^^^^^^^^^^^ reference [..] __cudaPushCallConfiguration(c850c79d62248396).
+//               ^^^^^^^^^^^^^^^^^^^^^^^^^^^ declaration [..] __cudaPushCallConfiguration(c850c79d62248396).
 //                                           ^^^^ reference [..] dim3#
 //                                                ^^^^^^^^ definition local 7
 //                                                          ^^^^ reference [..] dim3#
@@ -92,7 +92,7 @@
 //                                                        ^^^^^^ definition local 10
   extern "C" cudaError_t cudaLaunchKernel(const void *func, dim3 gridDim,
 //           ^^^^^^^^^^^ reference [..] cudaError_t#
-//                       ^^^^^^^^^^^^^^^^ reference [..] cudaLaunchKernel(94fa9035c8371171).
+//                       ^^^^^^^^^^^^^^^^ declaration [..] cudaLaunchKernel(94fa9035c8371171).
 //                                                    ^^^^ definition local 11
 //                                                          ^^^^ reference [..] dim3#
 //                                                               ^^^^^^^ definition local 12
@@ -119,13 +119,13 @@
 //                                   ^ definition local 18
 //                                               ^ reference local 18
   __device__ void *operator new(size_t, void *p) { return p; }
-//^^^^^^^^^^ reference [..] `cuda_stub.h:11:9`!
+//^^^^^^^^^^ reference [..] `<file>/cuda_stub.h`/__device__!
 //                 ^^^^^^^^ definition [..] `operator new`(ecd71fefd6822377).
 //                              ^^^^^^ reference [..] size_t#
 //                                            ^ definition local 19
 //                                                        ^ reference local 19
   __device__ void *operator new[](size_t, void *p) { return p; }
-//^^^^^^^^^^ reference [..] `cuda_stub.h:11:9`!
+//^^^^^^^^^^ reference [..] `<file>/cuda_stub.h`/__device__!
 //                 ^^^^^^^^ definition [..] `operator new[]`(ecd71fefd6822377).
 //                                ^^^^^^ reference [..] size_t#
 //                                              ^ definition local 20

@@ -7,17 +7,17 @@
 //                                                   ^ reference local 0
 //                                                     ^^^^ definition [..] remove_ref#type#
   template<class T> struct remove_ref<T&>  { typedef T type; };
-//               ^ definition local 1
-//                         ^^^^^^^^^^ definition [..] remove_ref#
+//               ^ definition (specialization) local 1
+//                         ^^^^^^^^^^ definition (specialization) [..] remove_ref#
 //                                    ^ reference local 1
 //                                                   ^ reference local 1
-//                                                     ^^^^ definition [..] remove_ref#type#
+//                                                     ^^^^ definition (specialization) [..] remove_ref#type#
   template<class T> struct remove_ref<T&&> { typedef T type; };
-//               ^ definition local 2
-//                         ^^^^^^^^^^ definition [..] remove_ref#
+//               ^ definition (specialization) local 2
+//                         ^^^^^^^^^^ definition (specialization) [..] remove_ref#
 //                                    ^ reference local 2
 //                                                   ^ reference local 2
-//                                                     ^^^^ definition [..] remove_ref#type#
+//                                                     ^^^^ definition (specialization) [..] remove_ref#type#
   
   template <typename T>
 //                   ^ definition local 3

@@ -7,7 +7,7 @@
     static constexpr int a = 0;
 //                       ^ definition [..] S0#a.
     static int y;
-//             ^ definition [..] S0#y.
+//             ^ declaration [..] S0#y.
   
     S0(): x(a) {
 //  ^^ definition [..] S0#S0(49f6e7a06ebc5aa8).

@@ -6,7 +6,7 @@
 //         ^^^^^^^^^^^^^ reference [..] `<file>/cuda_stub.h`/
   
   __global__ void g1(int x) {}
-//^^^^^^^^^^ reference [..] `cuda_stub.h:12:9`!
+//^^^^^^^^^^ reference [..] `<file>/cuda_stub.h`/__global__!
 //                ^^ definition [..] g1(d4f767463ce0a6b3).
 //                       ^ definition local 0
   
@@ -63,34 +63,34 @@
 //                            ^^ definition [..] a0#
     template <typename T> static __global__ void Call(T);
 //                     ^ definition local 6
-//                               ^^^^^^^^^^ reference [..] `cuda_stub.h:12:9`!
-//                                               ^^^^ reference [..] a0#Call(b07662a27bd562f9).
+//                               ^^^^^^^^^^ reference [..] `<file>/cuda_stub.h`/__global__!
+//                                               ^^^^ declaration [..] a0#Call(b07662a27bd562f9).
 //                                                    ^ reference local 6
   };
   struct a1 {
 //       ^^ definition [..] a1#
     template <typename T> static __global__ void Call(T);
 //                     ^ definition local 7
-//                               ^^^^^^^^^^ reference [..] `cuda_stub.h:12:9`!
-//                                               ^^^^ reference [..] a1#Call(9b289cee16747614).
+//                               ^^^^^^^^^^ reference [..] `<file>/cuda_stub.h`/__global__!
+//                                               ^^^^ declaration [..] a1#Call(9b289cee16747614).
 //                                                    ^ reference local 7
   };
   template <typename T> struct a2 {
 //                   ^ definition local 8
 //                             ^^ definition [..] a2#
     static __global__ void Call(T);
-//         ^^^^^^^^^^ reference [..] `cuda_stub.h:12:9`!
-//                         ^^^^ reference [..] a2#Call(9b289cee16747614).
+//         ^^^^^^^^^^ reference [..] `<file>/cuda_stub.h`/__global__!
+//                         ^^^^ declaration [..] a2#Call(9b289cee16747614).
 //                              ^ reference local 8
   };
   struct a3 {
 //       ^^ definition [..] a3#
     static __global__ void Call(int);
-//         ^^^^^^^^^^ reference [..] `cuda_stub.h:12:9`!
-//                         ^^^^ reference [..] a3#Call(d4f767463ce0a6b3).
+//         ^^^^^^^^^^ reference [..] `<file>/cuda_stub.h`/__global__!
+//                         ^^^^ declaration [..] a3#Call(d4f767463ce0a6b3).
     static __global__ void Call(void*);
-//         ^^^^^^^^^^ reference [..] `cuda_stub.h:12:9`!
-//                         ^^^^ reference [..] a3#Call(5d22bdacc48458e8).
+//         ^^^^^^^^^^ reference [..] `<file>/cuda_stub.h`/__global__!
+//                         ^^^^ declaration [..] a3#Call(5d22bdacc48458e8).
   };
   
   struct b {
@@ -181,7 +181,7 @@
 //                       ^^^^^ definition local 12
 //                                  ^^^^^^ definition local 13
       __global__ void mykernel(const int nthreads, const DType *in_data, DType *out_data) {}
-//    ^^^^^^^^^^ reference [..] `cuda_stub.h:12:9`!
+//    ^^^^^^^^^^ reference [..] `<file>/cuda_stub.h`/__global__!
 //                    ^^^^^^^^ definition [..] x/y/mykernel(36fc24b3817d5bcc).
 //                                       ^^^^^^^^ definition local 14
 //                                                       ^^^^^ reference local 12

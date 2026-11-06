@@ -107,7 +107,7 @@
   }
   
   class F0;
-//      ^^ reference [..] F0#
+//      ^^ declaration [..] F0#
   
   class F1 {
 //      ^^ definition [..] F1#
@@ -174,20 +174,20 @@
   }
   
   #define VISIT(_name) Visit##_name
-//        ^^^^^ definition [..] `types.cc:70:9`!
+//        ^^^^^ definition [..] `<file>/types.cc`/VISIT!
 //        documentation
 //        | No documentation available.
   
   enum VISIT(Sightseeing) {
-//     ^^^^^ reference [..] `types.cc:70:9`!
-//     ^^^^^ definition [..] VisitSightseeing#
+//     ^^^^^ definition (generated) [..] VisitSightseeing#
 //     documentation
 //     | No documentation available.
+//     ^^^^^ reference [..] `<file>/types.cc`/VISIT!
     VISIT(Museum),
-//  ^^^^^ definition [..] VisitMuseum.
+//  ^^^^^ definition (generated) [..] VisitMuseum.
 //  documentation
 //  | No documentation available.
-//  ^^^^^ reference [..] `types.cc:70:9`!
+//  ^^^^^ reference [..] `<file>/types.cc`/VISIT!
   };
   
   // Regression test for https://github.com/sourcegraph/scip-clang/issues/105
@@ -237,20 +237,20 @@
 //          ^ reference [..] E#
 //             ^^ reference [..] E#E0.
   #define QUALIFIED(enum_name, case_name) enum_name::case_name;
-//        ^^^^^^^^^ definition [..] `types.cc:91:9`!
+//        ^^^^^^^^^ definition [..] `<file>/types.cc`/QUALIFIED!
 //        documentation
 //        | No documentation available.
     (void)QUALIFIED(E, E0);
-//        ^^^^^^^^^ reference [..] E#
-//        ^^^^^^^^^ reference [..] E#E0.
-//        ^^^^^^^^^ reference [..] `types.cc:91:9`!
+//        ^^^^^^^^^ reference [..] `<file>/types.cc`/QUALIFIED!
+//                  ^ reference [..] E#
+//                     ^^ reference [..] E#E0.
   #undef QUALIFIED
-//       ^^^^^^^^^ reference [..] `types.cc:91:9`!
+//       ^^^^^^^^^ reference [..] `<file>/types.cc`/QUALIFIED!
   }
   
   /// Restating what's already implied by the name
   class DocumentedForwardDeclaration;
-//      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ reference [..] DocumentedForwardDeclaration#
+//      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ declaration [..] DocumentedForwardDeclaration#
   
   class DocumentedForwardDeclaration { };
 //      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ definition [..] DocumentedForwardDeclaration#
@@ -374,4 +374,5 @@
 //           ^ definition [..] M1#A#
 //           documentation
 //           | No documentation available.
+//           relation definition [..] M0#A#
   };

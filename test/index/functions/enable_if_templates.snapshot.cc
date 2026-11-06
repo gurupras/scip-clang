@@ -13,12 +13,12 @@
 //       ^^^^^^^^^ definition [..] std/enable_if#
   
   template <class T>
-//                ^ definition local 2
+//                ^ definition (specialization) local 2
   struct enable_if<true, T> {
-//       ^^^^^^^^^ definition [..] std/enable_if#
+//       ^^^^^^^^^ definition (specialization) [..] std/enable_if#
 //                       ^ reference local 2
     using type = T;
-//        ^^^^ definition [..] std/enable_if#type#
+//        ^^^^ definition (specialization) [..] std/enable_if#type#
 //               ^ reference local 2
   };
   
@@ -33,9 +33,9 @@
   template <>
   struct is_integral<int> {
 //       ^^^^^^^^^^^ reference [..] std/is_integral#
-//       ^^^^^^^^^^^ definition [..] std/is_integral#
+//       ^^^^^^^^^^^ definition (specialization) [..] std/is_integral#
     static constexpr bool value = true;
-//                        ^^^^^ definition [..] std/is_integral#value.
+//                        ^^^^^ definition (specialization) [..] std/is_integral#value.
   };
   
   template <class T>
