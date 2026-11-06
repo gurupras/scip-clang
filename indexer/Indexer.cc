@@ -1434,19 +1434,16 @@ static bool isSpecialization(const clang::Decl &decl) {
       || llvm::isa<clang::VarTemplateSpecializationDecl>(decl)) {
     return true;
   }
+  clang::TemplateSpecializationKind kind = clang::TSK_Undeclared;
   if (auto *functionDecl = llvm::dyn_cast<clang::FunctionDecl>(&decl)) {
-    return functionDecl->getTemplateSpecializationKind()
-           == clang::TSK_ExplicitSpecialization;
+    kind = functionDecl->getTemplateSpecializationKind();
+  } else if (auto *varDecl = llvm::dyn_cast<clang::VarDecl>(&decl)) {
+    kind = varDecl->getTemplateSpecializationKind();
+  } else if (auto *recordDecl = llvm::dyn_cast<clang::CXXRecordDecl>(&decl)) {
+    kind = recordDecl->getTemplateSpecializationKind();
   }
-  if (auto *varDecl = llvm::dyn_cast<clang::VarDecl>(&decl)) {
-    return varDecl->getTemplateSpecializationKind()
-           == clang::TSK_ExplicitSpecialization;
-  }
-  if (auto *recordDecl = llvm::dyn_cast<clang::CXXRecordDecl>(&decl)) {
-    if (recordDecl->getTemplateSpecializationKind()
-        == clang::TSK_ExplicitSpecialization) {
-      return true;
-    }
+  if (kind == clang::TSK_ExplicitSpecialization) {
+    return true;
   }
   // A member written inside a specialization's body, e.g. `f` in
   // `template <> struct Traits<X> { static int f(); };`, shares its symbol
