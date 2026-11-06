@@ -163,14 +163,22 @@ SymbolNameRef SymbolFormatter::getMacroSymbol(clang::SourceLocation defLoc) {
   auto defPLoc =
       this->sourceManager.getPresumedLoc(defLoc, /*UseLineDirectives*/ false);
   ENFORCE(defPLoc.isValid());
-  std::string_view filepath;
+  std::string filepath;
   PackageId packageId{};
   if (auto *fileMetadata =
           this->fileMetadataMap.getFileMetadata(defPLoc.getFileID())) {
     filepath = fileMetadata->stableFileId.path.asStringView();
     packageId = fileMetadata->packageId();
+  } else if (auto absPath = AbsolutePathRef::tryFrom(
+                 std::string_view(defPLoc.getFilename()))) {
+    // A file without metadata, e.g. a system header, has only its absolute
+    // path here. Name it the way FileMetadataMap names files outside the
+    // project, so that no machine-specific path ends up in a symbol.
+    filepath = fmt::format("<external>/{}/{}",
+                           HashValue::forText(absPath->asStringView()),
+                           absPath->fileName().value_or("unknown"));
   } else {
-    filepath = std::string_view(defPLoc.getFilename());
+    filepath = defPLoc.getFilename(); // <built-in>, <command line>, ...
   }
 
   // NOTE(def: macro-symbol)
