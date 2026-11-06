@@ -24,8 +24,19 @@ void ClangIdLookupMap::insert(AbsolutePathRef absPathRef, HashValue hashValue,
                                        .hashToFileId = {{hashValue, fileId}}}));
     return;
   }
-  // A single representative FileID is sufficient.
-  it->second->hashToFileId[hashValue] = fileId;
+  // A single representative FileID is sufficient, but it must not depend
+  // on insertion order: callers iterate address-seeded hash maps, so with
+  // ASLR the order changes from run to run. Keep the first-entered FileID
+  // (clang numbers FileIDs in entry order). For a re-includable header like
+  // <stddef.h>, entered several times with one hash, that is the entry
+  // whose declarations survived the include guards; with any other entry
+  // as representative, its declarations have no FileMetadata and
+  // references to them are dropped.
+  auto [hashIt, inserted] =
+      it->second->hashToFileId.try_emplace(hashValue, fileId);
+  if (!inserted && fileId < hashIt->second) {
+    hashIt->second = fileId;
+  }
 }
 
 void ClangIdLookupMap::forEachPathAndHash(
@@ -59,11 +70,16 @@ ClangIdLookupMap::lookupAnyFileId(AbsolutePathRef absPathRef) const {
   if (it == this->impl.end()) {
     return {};
   }
+  // The first-entered FileID across hashes, independent of the map's
+  // address-seeded iteration order.
+  std::optional<clang::FileID> first;
   for (auto [hashValue, fileId] : it->second->hashToFileId) {
-    return fileId;
+    if (!first || fileId < *first) {
+      first = fileId;
+    }
   }
-  ENFORCE(false, "Shouldn't have stored empty maps");
-  return {};
+  ENFORCE(first.has_value(), "Shouldn't have stored empty maps");
+  return first;
 }
 
 void FileMetadataMap::populate(const ClangIdLookupMap &clangIdLookupMap) {
