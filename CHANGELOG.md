@@ -1,5 +1,28 @@
 # scip-clang ChangeLog
 
+## v0.4.0-fork.3 (beta)
+
+See `docs/changes/CHANGES-0.4.0-fork.3.md` for the reasoning and evidence.
+
+- Emits `SymbolInformation.kind` and definition `enclosing_range`;
+  bumps scip to v0.5.0.
+- Macro-argument occurrences are placed where the argument is spelled.
+  Occurrences from a macro body carry `SymbolRole::Generated`.
+- Non-defining declarations (forward declarations, in-class method and
+  static member declarations, `extern` variables) carry
+  `SymbolRole::ForwardDefinition` instead of no role or `Definition`.
+- A using-declaration's alias symbol has a `Relationship{is_definition}`
+  to its target.
+- Macros are named `` `<file>/path`/NAME! `` instead of by the position
+  of their `#define`. Macros defined outside the project and referenced
+  from it are emitted as external symbols.
+- Definitions and declarations of explicit and partial template
+  specializations, and of members written inside them, carry the
+  fork-only role bit `1 << 24`. It is not a SCIP role.
+- Documents declare `position_encoding = UTF8CodeUnitOffsetFromLineStart`.
+- Snapshot output prints `declaration`, `(generated)` and
+  `(specialization)`.
+
 ## v0.4.0-alx.2 (beta)
 
 - No source changes from v0.4.0-alx.1. This is the first release
