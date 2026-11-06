@@ -1204,11 +1204,36 @@ TuIndexer::getTokenExpansionRange(
                                             {startExpansionLoc, endLoc});
 }
 
+// NOTE(def: occurrence-location)
+// An occurrence is placed where its token is written in the file, the way
+// clangd places it (SourceManager::getFileLoc):
+// - outside macros, at the token itself;
+// - for a token that comes from a macro argument, at the argument where it
+//   is spelled, e.g. `x` in `CHECK(x)`, and not at `CHECK`;
+// - for a token that comes from a macro body, at the outermost expansion,
+//   i.e. the macro name at the use site.
+// Upstream placed every macro-made token at the expansion, so all the
+// arguments of one invocation piled up on the macro name and occurrences of
+// one symbol in two arguments collapsed into one.
+//
+// The second value is true for a token from a macro body: it is not written
+// at the returned location, so the occurrence gets SymbolRole::Generated and
+// consumers can tell it from a token the user wrote there.
+std::pair<clang::SourceLocation, bool>
+TuIndexer::occurrenceLoc(clang::SourceLocation loc) const {
+  if (loc.isFileID()) {
+    return {loc, false};
+  }
+  auto fileLoc = this->sourceManager.getFileLoc(loc);
+  return {fileLoc, fileLoc != this->sourceManager.getSpellingLoc(loc)};
+}
+
 void TuIndexer::saveForwardDeclaration(SymbolNameRef symbol,
                                        clang::SourceLocation loc,
                                        DocComment &&docComment) {
-  auto expansionLoc = this->sourceManager.getExpansionLoc(loc);
-  auto [range, fileId] = this->getTokenExpansionRange(expansionLoc);
+  auto [fileLoc, viaMacroBody] = this->occurrenceLoc(loc);
+  (void)viaMacroBody;
+  auto [range, fileId] = this->getTokenExpansionRange(fileLoc);
   if (!this->fileIdsToBeIndexed.contains({fileId})) {
     return;
   }
@@ -1223,7 +1248,10 @@ void TuIndexer::saveForwardDeclaration(SymbolNameRef symbol,
 void TuIndexer::saveReference(SymbolNameRef symbol, clang::SourceLocation loc,
                               const clang::Decl *maybeFwdDecl,
                               int32_t extraRoles) {
-  auto expansionLoc = this->sourceManager.getExpansionLoc(loc);
+  auto [expansionLoc, viaMacroBody] = this->occurrenceLoc(loc);
+  if (viaMacroBody) {
+    extraRoles |= scip::SymbolRole::Generated;
+  }
   auto fileId = this->sourceManager.getFileID(expansionLoc);
   if (!this->fileIdsToBeIndexed.contains({fileId})) {
     return;
@@ -1309,7 +1337,10 @@ void TuIndexer::saveDefinition(
     SymbolNameRef symbol, clang::SourceLocation loc,
     std::optional<scip::SymbolInformation> &&optSymbolInfo,
     int32_t extraRoles, const clang::Decl *decl) {
-  auto expansionLoc = this->sourceManager.getExpansionLoc(loc);
+  auto [expansionLoc, viaMacroBody] = this->occurrenceLoc(loc);
+  if (viaMacroBody) {
+    extraRoles |= scip::SymbolRole::Generated;
+  }
   auto fileId = this->sourceManager.getFileID(expansionLoc);
   if (!this->fileIdsToBeIndexed.contains({fileId})) {
     return;

@@ -361,6 +361,11 @@ private:
   std::pair<FileLocalSourceRange, clang::FileID>
   getTokenExpansionRange(clang::SourceLocation startExpansionLoc) const;
 
+  /// Where an occurrence of the token at \param loc goes, and whether the
+  /// token comes from a macro body. See NOTE(ref: occurrence-location).
+  std::pair<clang::SourceLocation, bool>
+  occurrenceLoc(clang::SourceLocation loc) const;
+
   /// Helper method for recording forward declarations.
   ///
   /// Prefer this over \c saveReference or \c saveOccurrence.
