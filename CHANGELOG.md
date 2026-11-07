@@ -2,7 +2,7 @@
 
 ## v0.4.0-fork.3 (beta)
 
-See `docs/changes/CHANGES-0.4.0-fork.3.md` for the reasoning and evidence.
+See `docs/changes/CHANGES-0.4.0-fork.3.md` for the reasoning behind each change.
 
 - Emits `SymbolInformation.kind` and definition `enclosing_range`;
   bumps scip to v0.5.0.
