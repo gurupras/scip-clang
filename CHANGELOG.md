@@ -1,5 +1,16 @@
 # scip-clang ChangeLog
 
+## v0.4.0-fork.4 (beta)
+
+- Under `--deterministic`, a TU whose index holds two documents for one
+  path no longer aborts. A header without an include guard, entered with
+  different nested includes, legitimately has two hashes and so two
+  documents. They are now ordered by FileID, which follows inclusion order
+  within the TU, and the driver merges them as usual.
+- Every FileID of a header gets file metadata, not only the
+  representative one. A declaration in any entry of a header now gets a
+  symbol, so references to it are kept.
+
 ## v0.4.0-fork.3 (beta)
 
 See `docs/changes/CHANGES-0.4.0-fork.3.md` for the reasoning behind each change.
