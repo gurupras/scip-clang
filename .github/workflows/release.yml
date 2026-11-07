@@ -35,7 +35,7 @@ jobs:
             bazel_mem: "4g"
             bazel_jobs: "4"
           # darwin arm64: 3 cores, 7 GB RAM
-          - platform: "macos-14"
+          - platform: "macos-15"
             bazel_mem: "3g"
             bazel_jobs: "3"
     runs-on: ${{ matrix.platform }}
