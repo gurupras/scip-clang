@@ -1,5 +1,15 @@
 # scip-clang ChangeLog
 
+## v0.4.0-fork.5 (beta)
+
+- Constructors and destructors of a class template are named after the
+  plain identifier of their class at their declarations and definitions
+  too (`Ptr#Ptr(h).` instead of `` Ptr#`Ptr<T>`(h). ``), so the references
+  from instantiations, which were already plain, reach them. Symbols nested
+  under such a function (e.g. a local class) change with it. Offered
+  upstream as sourcegraph/scip-clang branch
+  gurupras:fix-template-ctor-dtor-names.
+
 ## v0.4.0-fork.4 (beta)
 
 - Under `--deterministic`, a TU whose index holds two documents for one
