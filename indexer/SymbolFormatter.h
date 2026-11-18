@@ -185,7 +185,8 @@ private:
   }
 
   /// Format the name of the decl to a buffer stored by `this` and return a view
-  /// to it.
+  /// to it. Constructors and destructors are named after the plain identifier
+  /// of their class; see NOTE(ref: ctor-dtor-plain-name).
   std::string_view formatTemporaryName(const clang::NamedDecl &);
 
   std::string_view getFunctionDisambiguator(const clang::FunctionDecl &,

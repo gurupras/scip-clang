@@ -761,6 +761,31 @@ std::string_view
 SymbolFormatter::formatTemporaryName(const clang::NamedDecl &namedDecl) {
   this->scratchBufferForName.clear();
   llvm::raw_string_ostream os(this->scratchBufferForName);
+  // NOTE(ref: ctor-dtor-plain-name): Name constructors and destructors
+  // after the plain identifier of their class.
+  //
+  // Inside a class template (the primary template or a partial
+  // specialization), the class type in a constructor's or destructor's
+  // name is the injected-class-name type, which printName prints with
+  // template arguments, e.g. `Ptr<T>`. The same member reached through an
+  // instantiation has a RecordType, which prints as `Ptr`. References go
+  // through the instantiation, while the disambiguator is computed from
+  // the pattern, so without this, a template's constructor would get one
+  // symbol at its declaration and definition, and another at its uses.
+  auto declName = namedDecl.getDeclName();
+  auto nameKind = declName.getNameKind();
+  if (nameKind == clang::DeclarationName::CXXConstructorName
+      || nameKind == clang::DeclarationName::CXXDestructorName) {
+    if (auto *recordDecl = declName.getCXXNameType()->getAsCXXRecordDecl()) {
+      if (auto *identifier = recordDecl->getIdentifier()) {
+        if (nameKind == clang::DeclarationName::CXXDestructorName) {
+          os << '~';
+        }
+        os << identifier->getName();
+        return std::string_view(this->scratchBufferForName);
+      }
+    }
+  }
   namedDecl.printName(os);
   return std::string_view(this->scratchBufferForName);
 }

@@ -91,7 +91,7 @@
   
   public:
     Ptr(T *ptr) : p(ptr) {}
-//  ^^^ definition [..] Ptr#`Ptr<T>`(ebd0a1552f8ce24f).
+//  ^^^ definition [..] Ptr#Ptr(ebd0a1552f8ce24f).
 //      ^ reference local 9
 //         ^^^ definition local 10
 //                ^ reference [..] Ptr#p.
